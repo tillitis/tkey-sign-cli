@@ -13,7 +13,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/pflag"
-	"github.com/tillitis/tillitis-key1-apps/internal/util"
+	"github.com/tillitis/tkey-sign/internal/util"
 	"github.com/tillitis/tkeyclient"
 	"github.com/tillitis/tkeysign"
 )
