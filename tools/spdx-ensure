@@ -19,6 +19,7 @@ missingok_files=(
 .editorconfig
 .gitignore
 .golangci.yml
+build.sh
 LICENSE
 Makefile
 README.md

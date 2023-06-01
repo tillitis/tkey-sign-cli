@@ -5,7 +5,10 @@ package main
 
 import (
 	"crypto/ed25519"
+	_ "embed"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -18,6 +21,12 @@ import (
 	"github.com/tillitis/tkeysign"
 )
 
+// nolint:typecheck // Avoid lint error when the embedding file is missing.
+// Build copies the built signer here
+//
+//go:embed signer.bin
+var signerBinary []byte
+
 // Use when printing err/diag msgs
 var le = log.New(os.Stderr, "", 0)
 
@@ -25,10 +34,44 @@ var le = log.New(os.Stderr, "", 0)
 // app has been compiled with touch requirement removed.
 var signerAppNoTouch string
 
+const (
+	// 4 chars each.
+	wantFWName0  = "tk1 "
+	wantFWName1  = "mkdf"
+	wantAppName0 = "tk1 "
+	wantAppName1 = "sign"
+)
+
+func isFirmwareMode(tk *tkeyclient.TillitisKey) bool {
+	nameVer, err := tk.GetNameVersion()
+	if err != nil {
+		return false
+	}
+	// not caring about nameVer.Version
+	return nameVer.Name0 == wantFWName0 &&
+		nameVer.Name1 == wantFWName1
+}
+
+func isWantedApp(signer tkeysign.Signer) bool {
+	nameVer, err := signer.GetAppNameVersion()
+	if err != nil {
+		if !errors.Is(err, io.EOF) {
+			le.Printf("GetAppNameVersion: %s\n", err)
+		}
+		return false
+	}
+
+	fmt.Printf("name0: %v, name1: %v\n", nameVer.Name0, nameVer.Name1)
+
+	// not caring about nameVer.Version
+	return nameVer.Name0 == wantAppName0 &&
+		nameVer.Name1 == wantAppName1
+}
+
 func main() {
 	var fileName, devPath string
 	var speed int
-	var showPubkeyOnly, verbose, helpOnly bool
+	var enterUSS, showPubkeyOnly, verbose, helpOnly bool
 	pflag.CommandLine.SetOutput(os.Stderr)
 	pflag.CommandLine.SortFlags = false
 	pflag.BoolVarP(&showPubkeyOnly, "show-pubkey", "p", false,
@@ -37,6 +80,8 @@ func main() {
 		"Set serial port device `PATH`. If this is not passed, auto-detection will be attempted.")
 	pflag.IntVar(&speed, "speed", tkeyclient.SerialSpeed,
 		"Set serial port speed in `BPS` (bits per second).")
+	pflag.BoolVar(&enterUSS, "uss", false,
+		"Enable typing of a phrase to be hashed as the User Supplied Secret. The USS is loaded onto the TKey along with the app itself. A different USS results in different SSH public/private keys, meaning a different identity.")
 	pflag.BoolVar(&verbose, "verbose", false, "Enable verbose output.")
 	pflag.BoolVar(&helpOnly, "help", false, "Output this help.")
 	pflag.Usage = func() {
@@ -100,6 +145,16 @@ public key of the signer app on the TKey.`, os.Args[0])
 		os.Exit(1)
 	}
 
+	if isFirmwareMode(tk) {
+		var secret []byte
+		if err := tk.LoadApp(signerBinary, secret); err != nil {
+			le.Printf("Couldn't load signer: %v\n", err)
+			os.Exit(1)
+		}
+
+		le.Printf("Signer app loaded.\n")
+	}
+
 	signer := tkeysign.New(tk)
 	exit := func(code int) {
 		if err := signer.Close(); err != nil {
@@ -108,6 +163,12 @@ public key of the signer app on the TKey.`, os.Args[0])
 		os.Exit(code)
 	}
 	handleSignals(func() { exit(1) }, os.Interrupt, syscall.SIGTERM)
+
+	if !isWantedApp(signer) {
+		le.Printf("No TKey on the serial port, or it's running wrong app (and is not in firmware mode)")
+		tk.Close()
+		os.Exit(1)
+	}
 
 	pubkey, err := signer.GetPubkey()
 	if err != nil {

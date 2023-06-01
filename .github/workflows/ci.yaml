@@ -27,7 +27,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           
       - name: make
-        run: make -j
+        run: ./build.sh
 
       - name: lint go code
         run: make lint

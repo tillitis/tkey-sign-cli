@@ -67,11 +67,15 @@ should be enough to get you a working Podman setup.
 
 ### Building with host tools
 
-You need `golang` and `make`.
+You need to build `tkey-libs` and the `signer` device app. There's a
+script available that clones the repos and copies the resulting
+`signer` binary to this directory:
 
 ```
-$ make
+$ ./build.sh
 ```
+
+Please inspect the script before running.
 
 ## Licenses and SPDX tags
 
