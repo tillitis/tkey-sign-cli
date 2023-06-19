@@ -16,7 +16,6 @@ import (
 	"syscall"
 
 	"github.com/spf13/pflag"
-	"github.com/tillitis/tkey-sign/internal/util"
 	"github.com/tillitis/tkeyclient"
 	"github.com/tillitis/tkeysign"
 )
@@ -132,7 +131,7 @@ public key of the signer app on the TKey.`, os.Args[0])
 
 	if devPath == "" {
 		var err error
-		devPath, err = util.DetectSerialPort(true)
+		devPath, err = tkeyclient.DetectSerialPort(true)
 		if err != nil {
 			os.Exit(1)
 		}
