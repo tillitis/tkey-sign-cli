@@ -18,5 +18,6 @@ require (
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
+	github.com/tillitis/tkeyutil v0.0.0-20230601165544-6d4b739494a2 // indirect
 	golang.org/x/crypto v0.7.0 // indirect
 )

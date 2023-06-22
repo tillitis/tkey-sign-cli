@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/tillitis/tkeyclient"
 	"github.com/tillitis/tkeysign"
+	"github.com/tillitis/tkeyutil"
 )
 
 // nolint:typecheck // Avoid lint error when the embedding file is missing.
@@ -60,15 +61,13 @@ func isWantedApp(signer tkeysign.Signer) bool {
 		return false
 	}
 
-	fmt.Printf("name0: %v, name1: %v\n", nameVer.Name0, nameVer.Name1)
-
 	// not caring about nameVer.Version
 	return nameVer.Name0 == wantAppName0 &&
 		nameVer.Name1 == wantAppName1
 }
 
 func main() {
-	var fileName, devPath string
+	var fileName, fileUSS, devPath string
 	var speed int
 	var enterUSS, showPubkeyOnly, verbose, helpOnly bool
 	pflag.CommandLine.SetOutput(os.Stderr)
@@ -80,7 +79,9 @@ func main() {
 	pflag.IntVar(&speed, "speed", tkeyclient.SerialSpeed,
 		"Set serial port speed in `BPS` (bits per second).")
 	pflag.BoolVar(&enterUSS, "uss", false,
-		"Enable typing of a phrase to be hashed as the User Supplied Secret. The USS is loaded onto the TKey along with the app itself. A different USS results in different SSH public/private keys, meaning a different identity.")
+		"Enable typing of a phrase to be hashed as the User Supplied Secret. The USS is loaded onto the TKey along with the app itself. A different USS results in different public/private keys, meaning a different identity.")
+	pflag.StringVar(&fileUSS, "uss-file", "",
+		"Read `FILE` and hash its contents as the USS. Use '-' (dash) to read from stdin. The full contents are hashed unmodified (e.g. newlines are not stripped).")
 	pflag.BoolVar(&verbose, "verbose", false, "Enable verbose output.")
 	pflag.BoolVar(&helpOnly, "help", false, "Output this help.")
 	pflag.Usage = func() {
@@ -125,6 +126,12 @@ public key of the signer app on the TKey.`, os.Args[0])
 		os.Exit(2)
 	}
 
+	if enterUSS && fileUSS != "" {
+		le.Printf("Pass only one of --uss or --uss-file.\n\n")
+		pflag.Usage()
+		os.Exit(2)
+	}
+
 	if !verbose {
 		tkeyclient.SilenceLogging()
 	}
@@ -146,12 +153,29 @@ public key of the signer app on the TKey.`, os.Args[0])
 
 	if isFirmwareMode(tk) {
 		var secret []byte
+		var err error
+
+		if enterUSS {
+			secret, err = tkeyutil.InputUSS()
+			if err != nil {
+			}
+		}
+		if fileUSS != "" {
+			secret, err = tkeyutil.ReadUSS(fileUSS)
+			if err != nil {
+			}
+		}
+
 		if err := tk.LoadApp(signerBinary, secret); err != nil {
 			le.Printf("Couldn't load signer: %v\n", err)
 			os.Exit(1)
 		}
 
 		le.Printf("Signer app loaded.\n")
+	} else {
+		if enterUSS || fileUSS != "" {
+			le.Printf("WARNING: App already loaded, your USS won't be used.")
+		}
 	}
 
 	signer := tkeysign.New(tk)
