@@ -16,28 +16,27 @@ See [Release notes](RELEASE.md).
 
 ### Usage
 
-You need the tkey-runapp from [the apps
-repo](https://github.com/tillitis/tillitis-key1-apps) the and the
-[`signer`](https://github.com/tillitis/tkey-device-signer). Build them
-first.
-
-Then:
-
 ```
-$ tkey-runapp [flags...] [path-to-signer-app]
 $ tkey-sign [flags...] [FILE]
-
 ```
 
 Options are:
 
 ```
-  -p, --show-pubkey   Don't sign anything, only output the public key.
-      --port PATH     Set serial port device PATH. If this is not passed,
-                      auto-detection will be attempted.
-      --speed BPS     Set serial port speed in BPS (bits per second). (default 62500)
-      --verbose       Enable verbose output.
-      --help          Output this help.
+  -p, --show-pubkey     Don't sign anything, only output the public key.
+      --port PATH       Set serial port device PATH. If this is not passed,
+                        auto-detection will be attempted.
+      --speed BPS       Set serial port speed in BPS (bits per second). (default
+                        62500)
+      --uss             Enable typing of a phrase to be hashed as the User
+                        Supplied Secret. The USS is loaded onto the TKey along
+                        with the app itself. A different USS results in
+                        different public/private keys, meaning a different identity.
+      --uss-file FILE   Read FILE and hash its contents as the USS. Use '-'
+                        (dash) to read from stdin. The full contents are hashed
+                        unmodified (e.g. newlines are not stripped).
+      --verbose         Enable verbose output.
+      --help            Output this help.
 ```
 
 ## Building
@@ -46,36 +45,45 @@ You have two options, either our OCI image
 `ghcr.io/tillitis/tkey-builder` for use with a rootless podman setup,
 or native tools.
 
-### Building with Podman
-
-We provide an OCI image with all tools you can use to build the
-tkey-libs and the apps. If you have `make` and Podman installed you
-can us it like this in the `tkey-libs` directory and then this
-directory:
-
-```
-make podman
-```
-
-and everything should be built. This assumes a working rootless
-Podman. On Ubuntu 22.10, running
-```
-apt install podman rootlesskit slirp4netns
-```
-
-should be enough to get you a working Podman setup.
-
-### Building with host tools
-
-You need to build `tkey-libs` and the `signer` device app. There's a
-script available that clones the repos and copies the resulting
-`signer` binary to this directory:
+With native tools you should be able to use our build script:
 
 ```
 $ ./build.sh
 ```
 
-Please inspect the script before running.
+which also clones and builds the [TKey device
+libraries](https://github.com/tillitis/tkey-libs) and the [signer
+device app](https://github.com/tillitis/tkey-device-signer) first.
+
+If you want to do it manually please inspect the build script, but
+basically you clone the `tkey-libs` and `tkey-device-signer` repos,
+build the signer, copy it to `signer.bin` here and then `make`.
+
+You can install `tkey-sign` and reload the udev rules to get access to
+the TKey with:
+
+```
+$ sudo make install
+$ sudo reload-rules
+```
+
+### Building with Podman
+
+We provide an OCI image with all tools you can use to build the
+tkey-libs and the apps.
+
+Like above you need to clone `tkey-libs` and the `tkey-device-signer`
+first. This repo and those have `podman` targets. So `make podman`
+should work in all of them. Be sure to copy the signer to this repo
+before building here.
+
+This assumes a working rootless Podman. On Ubuntu 22.10, running
+
+```
+apt install podman rootlesskit slirp4netns
+```
+
+should be enough to get you a working Podman setup.
 
 ## Licenses and SPDX tags
 
