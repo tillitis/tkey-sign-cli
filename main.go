@@ -66,6 +66,35 @@ func isWantedApp(signer tkeysign.Signer) bool {
 		nameVer.Name1 == wantAppName1
 }
 
+// signFile returns ed25519 signature
+func signFile(signer tkeysign.Signer, pubkey []byte, fileName string) ([]byte, error) {
+	message, err := os.ReadFile(fileName)
+	if err != nil {
+		return nil, fmt.Errorf("could not read %s: %w", fileName, err)
+	}
+
+	if len(message) > tkeysign.MaxSignSize {
+		return nil, fmt.Errorf("message too long, max is %d bytes", tkeysign.MaxSignSize)
+	}
+
+	le.Printf("Sending a %v bytes message for signing.\n", len(message))
+	if signerAppNoTouch == "" {
+		le.Printf("The TKey will flash green when touch is required ...\n")
+	} else {
+		le.Printf("WARNING! This tkey-sign and signer app is built with the touch requirement removed\n")
+	}
+	signature, err := signer.Sign(message)
+	if err != nil {
+		return nil, fmt.Errorf("signing failed: %w", err)
+	}
+
+	if !ed25519.Verify(pubkey, message, signature) {
+		return nil, fmt.Errorf("signature FAILED verification")
+	}
+
+	return signature, nil
+}
+
 func main() {
 	var fileName, fileUSS, devPath string
 	var speed int
@@ -158,11 +187,15 @@ public key of the signer app on the TKey.`, os.Args[0])
 		if enterUSS {
 			secret, err = tkeyutil.InputUSS()
 			if err != nil {
+				le.Printf("InputUSS: %v", err)
+				os.Exit(1)
 			}
 		}
 		if fileUSS != "" {
 			secret, err = tkeyutil.ReadUSS(fileUSS)
 			if err != nil {
+				le.Printf("ReadUSS: %v", err)
+				os.Exit(1)
 			}
 		}
 
@@ -172,10 +205,8 @@ public key of the signer app on the TKey.`, os.Args[0])
 		}
 
 		le.Printf("Signer app loaded.\n")
-	} else {
-		if enterUSS || fileUSS != "" {
-			le.Printf("WARNING: App already loaded, your USS won't be used.")
-		}
+	} else if enterUSS || fileUSS != "" {
+		le.Printf("WARNING: App already loaded, your USS won't be used.")
 	}
 
 	signer := tkeysign.New(tk)
@@ -185,12 +216,13 @@ public key of the signer app on the TKey.`, os.Args[0])
 		}
 		os.Exit(code)
 	}
+
 	handleSignals(func() { exit(1) }, os.Interrupt, syscall.SIGTERM)
 
 	if !isWantedApp(signer) {
 		le.Printf("No TKey on the serial port, or it's running wrong app (and is not in firmware mode)")
 		tk.Close()
-		os.Exit(1)
+		exit(1)
 	}
 
 	pubkey, err := signer.GetPubkey()
@@ -204,38 +236,16 @@ public key of the signer app on the TKey.`, os.Args[0])
 	}
 	le.Printf("Public Key from TKey: %x\n", pubkey)
 
-	message, err := os.ReadFile(fileName)
+	signature, err := signFile(signer, pubkey, fileName)
 	if err != nil {
-		le.Printf("Could not read %s: %v\n", fileName, err)
-		os.Exit(1)
-	}
-
-	if len(message) > tkeysign.MaxSignSize {
-		le.Printf("Message too long, max is %d bytes\n", tkeysign.MaxSignSize)
+		le.Printf("signing failed: %v", err)
 		exit(1)
 	}
 
-	le.Printf("Sending a %v bytes message for signing.\n", len(message))
-	if signerAppNoTouch == "" {
-		le.Printf("The TKey will flash green when touch is required ...\n")
-	} else {
-		le.Printf("WARNING! This tkey-sign and signer app is built with the touch requirement removed\n")
-	}
-	signature, err := signer.Sign(message)
-	if err != nil {
-		le.Printf("Sign failed: %v\n", err)
-		exit(1)
-	}
 	le.Printf("Signature over message by TKey (on stdout):\n")
 	fmt.Printf("%x\n", signature)
 
-	if !ed25519.Verify(pubkey, message, signature) {
-		le.Printf("Signature FAILED verification.\n")
-		exit(1)
-	}
-	le.Printf("Signature verified.\n")
-
-	exit(0)
+	os.Exit(0)
 }
 
 func handleSignals(action func(), sig ...os.Signal) {
