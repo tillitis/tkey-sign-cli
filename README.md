@@ -9,6 +9,9 @@ the [signer device
 app](https://github.com/tillitis/tkey-device-signer) for the actual
 signatures.
 
+It can also verify a signature, by supplying the message, signature
+and the public key.
+
 It is currently just a test tool and can take at most 4 kiB large
 files.
 
@@ -17,10 +20,20 @@ See [Release notes](RELEASE.md).
 ### Usage
 
 ```
-$ tkey-sign [flags...] [FILE]
+$ tkey-sign <command> [flags...] FILE...
 ```
 
-Options are:
+Commands are:
+```
+  sign        Create a signature
+  verify      Verify a signature
+```
+
+Usage for the sign-command are:
+```
+$ tkey-sign sign [flags...] FILE
+```
+with options:
 
 ```
   -p, --show-pubkey     Don't sign anything, only output the public key.
@@ -36,7 +49,12 @@ Options are:
                         (dash) to read from stdin. The full contents are hashed
                         unmodified (e.g. newlines are not stripped).
       --verbose         Enable verbose output.
-      --help            Output this help.
+  -h, --help            Output this help.
+```
+
+Usage for the verify-command are:
+```
+$ tkey-sign verify FILE SIG-FILE PUBKEY-FILE
 ```
 
 ## Building
