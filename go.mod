@@ -7,7 +7,7 @@ require (
 	github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4
 	github.com/spf13/pflag v1.0.5
 	github.com/tillitis/tkeyclient v0.0.0-20230607181239-48de67d61ab9
-	github.com/tillitis/tkeysign v0.0.7
+	github.com/tillitis/tkeysign v0.0.8-0.20230705065211-ba83f5e821f7
 	go.bug.st/serial v1.5.0
 	golang.org/x/sys v0.9.0
 	golang.org/x/term v0.9.0
