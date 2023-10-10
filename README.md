@@ -60,13 +60,22 @@ You have two options, either our OCI image
 `ghcr.io/tillitis/tkey-builder` for use with a rootless podman setup,
 or native tools.
 
+With podman you should be able to use:
+
+```
+$ ./build-podman.sh
+```
+
+which requires at least `git` and `make` besides podman. See below for
+setting things up.
+
 With native tools you should be able to use our build script:
 
 ```
 $ ./build.sh
 ```
 
-which also clones and builds the [TKey device
+Both of these also clones and builds the [TKey device
 libraries](https://github.com/tillitis/tkey-libs) and the [signer
 device app](https://github.com/tillitis/tkey-device-signer) first.
 
@@ -88,9 +97,9 @@ We provide an OCI image with all tools you can use to build the
 tkey-libs and the apps.
 
 Like above you need to clone `tkey-libs` and the `tkey-device-signer`
-first. This repo and those have `podman` targets. So `make podman`
-should work in all of them. Be sure to copy the signer to this repo
-before building here.
+first. All repos have `podman` make targets so `make podman` should
+work in all of them. Be sure to copy the signer to this repo before
+building here.
 
 This assumes a working rootless Podman. On Ubuntu 22.10, running
 

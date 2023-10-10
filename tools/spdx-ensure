@@ -20,6 +20,7 @@ missingok_files=(
 .gitignore
 .golangci.yml
 build.sh
+build-podman.sh
 LICENSE
 Makefile
 README.md
