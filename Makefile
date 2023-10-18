@@ -1,13 +1,15 @@
 # Check for OS
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
+	shasum = shasum -a 512
 	BUILD_CGO_ENABLED ?= 1
 else
+	shasum = sha512sum
 	BUILD_CGO_ENABLED ?= 0
 endif
 
 .PHONY: all
-all: tkey-sign
+all: check-signer-hash tkey-sign
 
 .PHONY: windows
 windows: tkey-sign.exe
@@ -47,6 +49,10 @@ tkey-sign:
 .PHONY: tkey-sign.exe
 tkey-sign.exe:
 	$(MAKE) GOOS=windows GOARCH=amd64 tkey-sign
+
+.PHONY: check-signer-hash
+check-signer-hash:
+	$(shasum) -c signer.bin.sha512
 
 .PHONY: clean
 clean:
