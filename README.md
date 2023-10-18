@@ -88,20 +88,12 @@ the TKey with:
 
 ```
 $ sudo make install
-$ sudo reload-rules
+$ sudo make reload-rules
 ```
 
-### Building with Podman
+### Installing Podman
 
-We provide an OCI image with all tools you can use to build the
-tkey-libs and the apps.
-
-Like above you need to clone `tkey-libs` and the `tkey-device-signer`
-first. All repos have `podman` make targets so `make podman` should
-work in all of them. Be sure to copy the signer to this repo before
-building here.
-
-This assumes a working rootless Podman. On Ubuntu 22.10, running
+On Ubuntu 22.10, running
 
 ```
 apt install podman rootlesskit slirp4netns

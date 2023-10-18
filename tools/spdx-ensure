@@ -30,6 +30,7 @@ go.sum
 gotools/Makefile
 gotools/go.mod
 gotools/go.sum
+signer.bin.sha512
 system/60-tkey.rules
 )
 
