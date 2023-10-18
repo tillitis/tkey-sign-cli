@@ -1,3 +1,11 @@
+# Check for OS
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+	BUILD_CGO_ENABLED ?= 1
+else
+	BUILD_CGO_ENABLED ?= 0
+endif
+
 .PHONY: all
 all: tkey-sign
 
@@ -34,7 +42,7 @@ podman:
 # .PHONY to let go-build handle deps and rebuilds
 .PHONY: tkey-sign
 tkey-sign:
-	go build -ldflags "-X main.signerAppNoTouch=$(TKEY_SIGNER_APP_NO_TOUCH)"
+	CGO_ENABLED=$(BUILD_CGO_ENABLED) go build -ldflags "-X main.signerAppNoTouch=$(TKEY_SIGNER_APP_NO_TOUCH)"
 
 .PHONY: tkey-sign.exe
 tkey-sign.exe:
