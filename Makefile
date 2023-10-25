@@ -56,7 +56,7 @@ check-signer-hash:
 
 .PHONY: clean
 clean:
-	rm -f tkey-sign
+	rm -f tkey-sign tkey-sign.exe
 
 .PHONY: lint
 lint:
