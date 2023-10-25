@@ -27,11 +27,15 @@ install:
 	install -Dm755 tkey-sign $(destbin)/tkey-sign
 	strip $(destbin)/tkey-sign
 	install -Dm644 system/60-tkey.rules $(destrules)/60-tkey.rules
+	install -Dm644 doc/tkey-sign.1 $(destman1)/tkey-sign.1
+	gzip -n9f $(destman1)/tkey-sign.1
+
 .PHONY: uninstall
 uninstall:
 	rm -f \
 	$(destbin)/tkey-sign \
 	$(destrules)/60-tkey.rules \
+	$(destman1)/tkey-sign.1.gz
 
 .PHONY: reload-rules
 reload-rules:
@@ -50,6 +54,9 @@ tkey-sign:
 .PHONY: tkey-sign.exe
 tkey-sign.exe:
 	$(MAKE) GOOS=windows GOARCH=amd64 tkey-sign
+
+doc/tkey-sign.1: doc/tkey-sign.scd
+	scdoc < $^ > $@
 
 .PHONY: check-signer-hash
 check-signer-hash:

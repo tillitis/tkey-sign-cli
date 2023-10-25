@@ -19,12 +19,14 @@ missingok_files=(
 .editorconfig
 .gitignore
 .golangci.yml
-build.sh
-build-podman.sh
 LICENSE
 Makefile
 README.md
 RELEASE.md
+build.sh
+build-podman.sh
+doc/tkey-sign.1
+doc/tkey-sign.scd
 go.mod
 go.sum
 gotools/Makefile
