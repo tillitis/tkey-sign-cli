@@ -15,6 +15,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"syscall"
 
@@ -32,6 +33,8 @@ var signerBinary []byte
 
 // Use when printing err/diag msgs
 var le = log.New(os.Stderr, "", 0)
+
+var version string
 
 // May be set to non-empty at build time to indicate that the signer
 // app has been compiled with touch requirement removed.
@@ -242,16 +245,38 @@ func handleSignals(action func(), sig ...os.Signal) {
 	}()
 }
 
+func readBuildInfo() string {
+	var v string
+
+	if info, ok := debug.ReadBuildInfo(); ok {
+		sb := strings.Builder{}
+		sb.WriteString("devel")
+		for _, setting := range info.Settings {
+			if strings.HasPrefix(setting.Key, "vcs") {
+				sb.WriteString(fmt.Sprintf(" %s=%s", setting.Key, setting.Value))
+			}
+		}
+		v = sb.String()
+	}
+	return v
+}
+
 func main() {
 	var fileName, fileUSS, fileSignature, filePubkey, devPath string
 	var speed int
-	var enterUSS, showPubkeyOnly, verbose, helpOnlySign, helpOnlyVerify bool
+	var enterUSS, showPubkeyOnly, verbose, helpOnly, helpOnlySign, helpOnlyVerify, versionOnly bool
 
 	signString := "sign"
 	verifyString := "verify"
 
+	if version == "" {
+		version = readBuildInfo()
+	}
+
 	// Default text to show
 	root := pflag.NewFlagSet("root", pflag.ExitOnError)
+	root.BoolVar(&versionOnly, "version", false, "Output version information.")
+	root.BoolVar(&helpOnly, "help", false, "Give help text.")
 	root.Usage = func() {
 		desc := fmt.Sprintf(`%[1]s signs the data provided in FILE (the "message")
 using the Tillitis TKey. The message will be hashed using
@@ -325,6 +350,23 @@ Use <command> --help for further help, i.e. %[1]s verify --help`, os.Args[0])
 	if len(os.Args) == 1 {
 		root.Usage()
 		os.Exit(2)
+	}
+
+	// version? Print and exit
+	if len(os.Args) == 2 {
+		if err := root.Parse(os.Args); err != nil {
+			le.Printf("Error parsing input arguments: %v\n", err)
+			os.Exit(2)
+		}
+		if versionOnly {
+			fmt.Printf("tkey-sign %s\n", version)
+			os.Exit(0)
+		}
+
+		if helpOnly {
+			root.Usage()
+			os.Exit(0)
+		}
 	}
 
 	switch os.Args[1] {
