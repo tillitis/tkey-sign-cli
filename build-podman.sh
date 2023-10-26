@@ -25,6 +25,6 @@ fi
 make -C ../tkey-libs podman
 make -C ../tkey-device-signer podman
 
-cp ../tkey-device-signer/signer/app.bin signer.bin
+cp ../tkey-device-signer/signer/app.bin cmd/tkey-sign/signer.bin
 
 make podman

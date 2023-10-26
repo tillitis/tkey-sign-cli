@@ -81,7 +81,8 @@ device app](https://github.com/tillitis/tkey-device-signer) first.
 
 If you want to do it manually please inspect the build script, but
 basically you clone the `tkey-libs` and `tkey-device-signer` repos,
-build the signer, copy it to `signer.bin` here and then `make`.
+build the signer, copy it's `app.bin` to `cmd/tkey-sign/signer.bin`
+and run `make`.
 
 You can install `tkey-sign` and reload the udev rules to get access to
 the TKey with:
