@@ -5,31 +5,122 @@
 .nh
 .ad l
 .\" Begin generated content:
-.TH "tkey-sign" "1" "2023-10-25"
+.TH "tkey-sign" "1" "2023-11-16"
 .P
 .SH NAME
 .P
-tkey-sign - A hardware-backed digital signature command
+tkey-sign - Create or verify digital signatures with the Tillitis TKey
 .P
 .SH SYNOPSIS
 .P
-\fBtkey-sign\fR sign [options.\&.\&.\&] FILE
+\fBtkey-sign\fR -h/--help
 .P
-\fBtkey-sign\fR verify [options.\&.\&.\&] FILE SIG-FILE PUBKEY-FILE
+\fBtkey-sign\fR -G/--getkey -p/--public pubkey [-d/--port device] [-f/--force] [-s/--speed speed] [--uss] [--uss-file ussfile] [--verbose]
+.P
+\fBtkey-sign\fR -S/--sign -m message -p/--public pubkey [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
+.P
+\fBtkey-sign\fR -V/--verify -m message -p/--public pubkey [--verbose] [-x sigfile]
+.P
+\fBtkey-sign\fR --version
 .P
 .SH DESCRIPTION
 .P
-\fBtkey-sign\fR is a hardware-backed digital signature command using the
-Tillitis TKey and the \fBsigner\fR device app.\&
+\fBtkey-sign\fR creates (-S) and verifies (-V) cryptographic signatures of
+files.\& The signature is created by the \fBsigner\fR device app running on
+the Tillitis TKey.\& The signer is automatically loaded into the TKey
+when signing or extracting the public key.\&
 .P
-.SH OPTIONS
+\fB-G, --getkey\fR
 .P
-Common options for both commands:
+.RS 4
+Load device app (if not already loaded) and output its public key into
+a file.\& Pass the filename to store the public key in with \fB-p pubkey\fR.\&
+Combine with \fB--uss\fR or \fB--uss-file ussfile\fR to change the key pair.\&
 .P
+.RE
+\fB-S, --sign\fR
+.P
+.RS 4
+Load device app (if not already loaded) and sign the specified message
+file (\fB-m message\fR).\& Store a signature in a file.\& Default signature
+file is message file + ".\&sig", specify another filename with \fB-x
+sigfile\fR.\& Also needs \fB-p pubkey\fR which is used for the comment in the
+sigfile and to verify that you really have the same public key as the
+loaded device app.\&
+.P
+Combine with \fB--uss\fR or \fB--uss-file ussfile\fR to change the key pair.\&
+.P
+.RE
+\fB-V, --verify\fR
+.P
+.RS 4
+Verify the signature of message.\& Does not need a connected TKey.\&
+Needs \fB-m message\fR and \fB-p pubkey\fR.\& Default signature file is message.\&sig.\&
+Specify with \fB-x sigfile\fR.\&
+.P
+.RE
+\fB-d, --port device\fR
+.P
+.RS 4
+Specify the device path for the TKey, typically something like
+\fB/dev/ttyACM0\fR.\& By default the device is auto-detected.\&
+.P
+.RE
+\fB-f, --force\fR
+.P
+.RS 4
+Force writing signature and pubkey file, overwriting existing files.\&
+.P
+.RE
 \fB-h, --help\fR
 .P
 .RS 4
-Output help text.\&
+Output short help text.\&
+.P
+.RE
+\fB-m message\fR
+.P
+.RS 4
+When signing, the file containing the message to sign.\&
+When verifying, the file containing the message to verify.\&
+.P
+.RE
+\fB-p, --public pubkey\fR
+.P
+.RS 4
+Specify path to public key file.\&
+.P
+.RE
+\fB-s, --speed speed\fR
+.P
+.RS 4
+Specify the speed in bits/second for the TKey device.\& Default is
+62500 b/s.\&
+.P
+.RE
+\fB--uss\fR
+.P
+.RS 4
+Interactively enter a User Supplied Secret to be used when loading
+a device app to the TKey.\& This is used to create different key
+pairs.\& A warning is printed if the app is already loaded and this
+USS is not used.\&
+.P
+.RE
+\fB--uss-file secret\fR
+.P
+.RS 4
+Use a User Supplied Secret in a file to be used when loading a
+device app to the TKey.\& This is used to create different key
+pairs.\& A warning is printed if the app is already loaded and this
+USS is not used.\& Use \fB-\fR to input from stdin.\&
+.P
+.RE
+\fB--verbose\fR
+.P
+.RS 4
+Be very verbose about what is happening, including hexdumps of
+traffic to and from the TKey.\&
 .P
 .RE
 \fB--version\fR
@@ -38,63 +129,131 @@ Output help text.\&
 Output version information and quit.\&
 .P
 .RE
-.SH COMMANDS
-.P
-.SS sign
-.P
-\fBtkey-sign\fR sign [-p] [--port PATH] [--speed BPS] [--uss] [--uss-file
-FILE] [--verbose]
-.P
-\fB-p\fR, \fB--port PATH\fR
+\fB-x sigfile\fR
 .P
 .RS 4
-Set serial port device PATH.\& If this is not passed, auto-detection
-will be attempted.\&
-.P
+The signature file to create or use with verification.\& The default
+when not using \fB-x\fR is \fBmessage.\&sig\fR.\&
 .P
 .RE
-\fB--speed BPS\fR
+.SH FORMATS
+.P
+Signature files are expected to contain a one-line comment beginning
+with "untrusted comment: ", then encoded in BASE64:
 .P
 .RS 4
-Set serial port speed to BPS b/s.\& Default is 62500 b/s.\&
-.P
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.IP \(bu 4
+.\}
+2 byte algorithm identifier, so far only "Ed" for Ed25519.\&
 .RE
-\fB--uss\fR
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.IP \(bu 4
+.\}
+8 byte key number (unused by tkey-sign).\&
+.RE
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.IP \(bu 4
+.\}
+64 byte Ed25519 signature.\&
+
+.RE
+.P
+Pubkey files are expected to contain, a one-line comment beginning
+with "untrusted comment: ", then encoded in BASE64:
 .P
 .RS 4
-Ask for a phrase to be hashed as the User Supplied Secret.\& The
-USS is loaded onto the TKey along with the app itself.\& A
-different USS results in different different cryptographic key
-pair used for signing.\&
-.P
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.IP \(bu 4
+.\}
+2 byte algorithm identifier, so far only "Ed" for Ed25519.\&
 .RE
-\fB--uss-file FILE\fR
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.IP \(bu 4
+.\}
+8 byte key number (unused by tkey-sign).\&
+.RE
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.IP \(bu 4
+.\}
+32 byte Ed25519 public key.\&
+
+.RE
+.P
+.SH EXIT STATUS
+.P
+The exit code is 0 on success and >0 if an error occurs.\&
+.P
+It may fail because of one of the following reasons:
 .P
 .RS 4
-Read FILE and hash its contents as the USS.\& Use '\&-'\& (dash) to read
-from stdin.\& The full contents are hashed unmodified (e.\&g.\& newlines 
-are not stripped).\&
-.P
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.IP \(bu 4
+.\}
+Connection with or uploading of the app to the TKey failed.\&
 .RE
-\fB--verbose\fR
-.P
 .RS 4
-Be more verbose, including reporting progress when writing to
-a file.\&
-.P
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.IP \(bu 4
+.\}
+Some necessary files do not exist.\&
 .RE
-.SS verify
-.P
-\fBtkey-sign\fR verify FILE SIG-FILE PUBKEY-FILE
-.P
-Verifies the Ed25519 signature of FILE.\& Does not need a connected TKey
-to verify.\&
-.P
-SIG-FILE is expected to be 64 bytes Ed25519 signature in hex.\&
-PUBKEY-FILE is expected to be 32 bytes Ed25519 public key in hex.\&
-.P
-The exit code is 0 if the signature is valid, otherwise non-zero.\&
-Newlines will be stripped from the input files.\&
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.IP \(bu 4
+.\}
+File parse error.\&
+.RE
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.IP \(bu 4
+.\}
+Public key of device app doesn'\&t match public key file.\&
+.RE
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.IP \(bu 4
+.\}
+The computed message file signature does not match the signature file.\&
+
+.RE
 .P
 .SH CONFIGURATION
 .P
@@ -114,7 +273,7 @@ ENV{ID_SECURITY_TOKEN}="1"
 .fi
 .RE
 .P
-Put this in \fB/etc/udev/rules.\&d/60-tkey.\&rules\fR and run \fBudevadm control --reload\fR 
+Put this in \fB/etc/udev/rules.\&d/60-tkey.\&rules\fR and run \fBudevadm control --reload\fR
 which should make the TKey device (typically \fB/dev/ttyACM0\fR)
 availabe to anyone logged in on the console (see \fBloginctl\fR).\&
 .P
@@ -139,30 +298,43 @@ working in.\&
 .P
 .SH EXAMPLES
 .P
-.nf
-.RS 4
-$ tkey-sign sign --uss Makefile
-Auto-detected serial port /dev/ttyACM0
-Connecting to TKey on serial port /dev/ttyACM0 \&.\&.\&.
-Enter phrase for the USS: 
-Repeat the phrase: 
-Signer app loaded\&.
-Public Key from TKey: c06f2c8a0616b833640d450e56fe0cc04718569a5dac9c2b8c53ce55efd93f88
-SHA512 hash: f0d89ef5c2594f5d9246128187e31bb99ee2f0631b5fad17293f3fff2a2b4f6238e52a282f28c6fd80a03ad2128183c6ded6e36faf3a1e4073a12cd6fb004681
-The TKey will flash green when touch is required \&.\&.\&.
-Signature over message by TKey (on stdout):
-7816315d8e746e935fe7399ccb323e343c9e17b4421501ce031bac577c914cc55413a6fc8526b3b0071de6a290fb2840d051e98286a81d23bd1068dce2179000
-.fi
-.RE
+All examples either load the device app automatically or works with an
+already loaded device app.\&
+.P
+Store the public key in a file.\& When loading the device app modify the
+measured identity with a User Supplied Secret.\& The public key file `key.\&pub`
+already exists so `tkey-sign` asks if it should replace it.\&
 .P
 .nf
 .RS 4
-$ tkey-sign verify Makefile sig pubkey
-Verifying signature \&.\&.\&.
-Public key: c06f2c8a0616b833640d450e56fe0cc04718569a5dac9c2b8c53ce55efd93f88
-Signature: 7816315d8e746e935fe7399ccb323e343c9e17b4421501ce031bac577c914cc55413a6fc8526b3b0071de6a290fb2840d051e98286a81d23bd1068dce2179000
-SHA512 hash: f0d89ef5c2594f5d9246128187e31bb99ee2f0631b5fad17293f3fff2a2b4f6238e52a282f28c6fd80a03ad2128183c6ded6e36faf3a1e4073a12cd6fb004681
-Signature verified\&.
+$ tkey-sign -G -p key\&.pub --uss
+Enter phrase for the USS:
+Repeat the phrase:
+File key\&.pub exists\&. Overwrite [y/n]?
+y
+$
+.fi
+.RE
+.P
+Sign a file.\& The program warns that the \fBsigner\fR device app is already
+loaded, probably from the above command.\&
+.P
+.nf
+.RS 4
+\&./tkey-sign -S -m message -p key\&.pub
+WARNING: App already loaded\&.
+$
+.fi
+.RE
+.P
+Verify a signature over a message file with the signature in the
+default "message.\&sig" file:
+.P
+.nf
+.RS 4
+$ tkey-sign -V -m message -p key\&.pub
+Signature verified
+$
 .fi
 .RE
 .P

@@ -8,14 +8,11 @@ import (
 	"crypto/ed25519"
 	"crypto/sha512"
 	_ "embed"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
+	"io/fs"
 	"log"
 	"os"
-	"os/signal"
-	"runtime/debug"
 	"strings"
 	"syscall"
 
@@ -23,6 +20,15 @@ import (
 	"github.com/tillitis/tkeyclient"
 	"github.com/tillitis/tkeysign"
 	"github.com/tillitis/tkeyutil"
+)
+
+type command int
+
+const (
+	cmdUnknown = iota
+	cmdGetKey
+	cmdSign
+	cmdVerify
 )
 
 // nolint:typecheck // Avoid lint error when the embedding file is missing.
@@ -34,144 +40,142 @@ var signerBinary []byte
 // Use when printing err/diag msgs
 var le = log.New(os.Stderr, "", 0)
 
-var version string
+var (
+	version string
+	verbose = false
+)
+
+type pubKey struct {
+	Alg    [2]byte
+	KeyNum [8]byte
+	Key    [32]byte
+}
+
+type signature struct {
+	Alg    [2]byte
+	KeyNum [8]byte
+	Sig    [64]byte
+}
 
 // May be set to non-empty at build time to indicate that the signer
 // app has been compiled with touch requirement removed.
 var signerAppNoTouch string
 
-const (
-	// 4 chars each.
-	wantFWName0  = "tk1 "
-	wantFWName1  = "mkdf"
-	wantAppName0 = "tk1 "
-	wantAppName1 = "sign"
-)
-
-func isFirmwareMode(tk *tkeyclient.TillitisKey) bool {
-	nameVer, err := tk.GetNameVersion()
-	if err != nil {
-		return false
-	}
-	// not caring about nameVer.Version
-	return nameVer.Name0 == wantFWName0 &&
-		nameVer.Name1 == wantFWName1
-}
-
-func isWantedApp(signer tkeysign.Signer) bool {
-	nameVer, err := signer.GetAppNameVersion()
-	if err != nil {
-		if !errors.Is(err, io.EOF) {
-			le.Printf("GetAppNameVersion: %s\n", err)
-		}
-		return false
-	}
-
-	// not caring about nameVer.Version
-	return nameVer.Name0 == wantAppName0 &&
-		nameVer.Name1 == wantAppName1
-}
-
-// signFile returns Ed25519 signature
-func signFile(signer tkeysign.Signer, pubkey []byte, fileName string) ([]byte, error) {
+// signFile uses the connection to the signer and produces an Ed25519
+// signature over the file in fileName. It automatically verifies the
+// signature against the provided pubkey.
+//
+// It returns the Ed25519 signature on success or an error.
+func signFile(signer tkeysign.Signer, pubkey []byte, fileName string) (*signature, error) {
 	message, err := os.ReadFile(fileName)
 	if err != nil {
-		return nil, fmt.Errorf("could not read %s: %w", fileName, err)
+		return nil, fmt.Errorf("ReadFile: %w", err)
 	}
 
 	fileDigest := sha512.Sum512(message)
-	le.Printf("SHA512 hash: %x\n", fileDigest)
-
-	if signerAppNoTouch == "" {
-		le.Printf("The TKey will flash green when touch is required ...\n")
-	} else {
-		le.Printf("WARNING! This tkey-sign and signer app is built with the touch requirement removed\n")
+	fileDigestHex := fmt.Sprintf("%x  %s\n", fileDigest, fileName)
+	if verbose {
+		le.Printf("SHA512 hash: %x", fileDigest)
+		le.Printf("SHA512 hash: %v", fileDigest)
 	}
 
-	signature, err := signer.Sign(fileDigest[:])
+	if signerAppNoTouch != "" {
+		le.Printf("WARNING! This tkey-sign and signer app is built with the touch requirement removed")
+	}
+
+	sig, err := signer.Sign([]byte(fileDigestHex))
 	if err != nil {
 		return nil, fmt.Errorf("signing failed: %w", err)
 	}
 
-	if !ed25519.Verify(pubkey, fileDigest[:], signature) {
+	if verbose {
+		le.Printf("signature: %x", sig)
+	}
+
+	if !ed25519.Verify(pubkey, []byte(fileDigestHex), sig) {
 		return nil, fmt.Errorf("signature FAILED verification")
 	}
 
-	return signature, nil
+	s := signature{
+		Alg:    [2]byte{'E', 'd'},
+		KeyNum: [8]byte{1, 7},
+		Sig:    [64]byte{},
+	}
+
+	copy(s.Sig[:], sig)
+
+	return &s, nil
 }
 
-// fileInputToHex reads inputFile and returns a trimmed slice decoded to hex.
-func fileInputToHex(inputFile string) ([]byte, error) {
-	input, err := os.ReadFile(inputFile)
+// verifySignature verifies a Ed25519 signature stored in sigFile over
+// messageFile with public key in pubkeyFile
+func verifySignature(messageFile string, sigFile string, pubkeyFile string) error {
+	signature, err := readSig(sigFile)
 	if err != nil {
-		return nil, fmt.Errorf("could not read %s: %w", inputFile, err)
+		if errors.Is(errors.Unwrap(err), fs.ErrNotExist) {
+			return fmt.Errorf("Signature file %v not found, specify with '-x sigfile'", sigFile)
+		}
+
+		return fmt.Errorf("%w", err)
 	}
 
-	input = bytes.Trim(input, "\n")
-	hexOutput := make([]byte, hex.DecodedLen(len(input)))
-	_, err = hex.Decode(hexOutput, input)
+	if len(signature.Sig) != 64 {
+		return fmt.Errorf("invalid length of signature. Expected 64 bytes, got %d bytes", len(signature.Sig))
+	}
+
+	pubkey, err := readKey(pubkeyFile)
 	if err != nil {
-		return nil, fmt.Errorf("could not decode: %w", err)
+		return fmt.Errorf("%w", err)
 	}
-	return hexOutput, nil
-}
 
-// verifySignature verifies a Ed25519 signature from input files of message, signature and public key
-func verifySignature(fileMessage string, fileSignature string, filePubkey string) error {
-	signature, err := fileInputToHex(fileSignature)
+	if len(pubkey.Key) != 32 {
+		return fmt.Errorf("invalid length of public key. Expected 32 bytes, got %d bytes", len(pubkey.Key))
+	}
+
+	message, err := os.ReadFile(messageFile)
 	if err != nil {
-		return fmt.Errorf("decodeFileInput: %w", err)
-	}
-
-	if len(signature) != 64 {
-		return fmt.Errorf("invalid length of signature. Expected 64 bytes, got %d bytes", len(signature))
-	}
-
-	pubkey, err := fileInputToHex(filePubkey)
-	if err != nil {
-		return fmt.Errorf("decodeFileInput: %w", err)
-	}
-
-	if len(pubkey) != 32 {
-		return fmt.Errorf("invalid length of public key. Expected 32 bytes, got %d bytes", len(pubkey))
-	}
-
-	fmt.Printf("Public key: %x\n", pubkey)
-	fmt.Printf("Signature: %x\n", signature)
-
-	message, err := os.ReadFile(fileMessage)
-	if err != nil {
-		return fmt.Errorf("could not read %s: %w", fileMessage, err)
+		return fmt.Errorf("could not read %s: %w", messageFile, err)
 	}
 
 	digest := sha512.Sum512(message)
-	le.Printf("SHA512 hash: %x\n", digest)
+	digestHex := fmt.Sprintf("%x  %s\n", digest, messageFile)
+	if verbose {
+		le.Printf("SHA512 hash: %x", digest)
+	}
 
-	if !ed25519.Verify(pubkey, digest[:], signature) {
+	if !ed25519.Verify(pubkey.Key[:], []byte(digestHex), signature.Sig[:]) {
 		return fmt.Errorf("signature not valid")
 	}
 
 	return nil
 }
 
-// doSign connects to a TKey and signs the attached file
-func doSign(devPath string, verbose bool, fileName string, fileUSS string, enterUSS bool, showPubkeyOnly bool, speed int) error {
+// loadSigner loads the signer device app into the TKey at device
+// devPath with speed b/s, possibly using a User Supplied Secret
+// either in fileUSS or prompting for the USS interactively if
+// enterUSS is true.
+//
+// It then connects to the running signer and returns an interface to
+// the Signer, the public key, and a possible error.
+func loadSigner(devPath string, speed int, fileUSS string, enterUSS bool) (*tkeysign.Signer, []byte, error) {
 	if !verbose {
 		tkeyclient.SilenceLogging()
 	}
 
 	if devPath == "" {
 		var err error
-		devPath, err = tkeyclient.DetectSerialPort(true)
+		devPath, err = tkeyclient.DetectSerialPort(false)
 		if err != nil {
-			return fmt.Errorf("DetectSerialPort: %w", err)
+			return nil, nil, fmt.Errorf("DetectSerialPort: %w", err)
 		}
 	}
 
 	tk := tkeyclient.New()
-	le.Printf("Connecting to TKey on serial port %s ...\n", devPath)
+	if verbose {
+		le.Printf("Connecting to TKey on serial port %s ...", devPath)
+	}
 	if err := tk.Connect(devPath, tkeyclient.WithSpeed(speed)); err != nil {
-		return fmt.Errorf("could not open %s: %w", devPath, err)
+		return nil, nil, fmt.Errorf("could not open %s: %w", devPath, err)
 	}
 
 	if isFirmwareMode(tk) {
@@ -181,21 +185,26 @@ func doSign(devPath string, verbose bool, fileName string, fileUSS string, enter
 		if enterUSS {
 			secret, err = tkeyutil.InputUSS()
 			if err != nil {
-				return fmt.Errorf("InputUSS: %w", err)
+				tk.Close()
+				return nil, nil, fmt.Errorf("InputUSS: %w", err)
 			}
 		}
 		if fileUSS != "" {
 			secret, err = tkeyutil.ReadUSS(fileUSS)
 			if err != nil {
-				return fmt.Errorf("ReadUSS: %w", err)
+				tk.Close()
+				return nil, nil, fmt.Errorf("ReadUSS: %w", err)
 			}
 		}
 
 		if err := tk.LoadApp(signerBinary, secret); err != nil {
-			return fmt.Errorf("couldn't load signer: %w", err)
+			tk.Close()
+			return nil, nil, fmt.Errorf("couldn't load signer: %w", err)
 		}
 
-		le.Printf("Signer app loaded.\n")
+		if verbose {
+			le.Printf("Signer app loaded.")
+		}
 	} else {
 		if enterUSS || fileUSS != "" {
 			le.Printf("WARNING: App already loaded, your USS won't be used.")
@@ -205,252 +214,234 @@ func doSign(devPath string, verbose bool, fileName string, fileUSS string, enter
 	}
 
 	signer := tkeysign.New(tk)
-	defer signer.Close()
 
 	handleSignals(func() { os.Exit(1) }, os.Interrupt, syscall.SIGTERM)
 
 	if !isWantedApp(signer) {
-		return fmt.Errorf("no TKey on the serial port, or it's running wrong app (and is not in firmware mode)")
+		signer.Close()
+		return nil, nil, fmt.Errorf("no TKey on the serial port, or it's running wrong app (and is not in firmware mode)")
 	}
 
 	pubkey, err := signer.GetPubkey()
 	if err != nil {
-		return fmt.Errorf("GetPubKey failed: %w", err)
-	}
-	if showPubkeyOnly {
-		fmt.Printf("%x\n", pubkey)
-		return nil
-	}
-	le.Printf("Public Key from TKey: %x\n", pubkey)
-
-	signature, err := signFile(signer, pubkey, fileName)
-	if err != nil {
-		return fmt.Errorf("signing faild: %w", err)
+		signer.Close()
+		return nil, nil, fmt.Errorf("GetPubKey failed: %w", err)
 	}
 
-	le.Printf("Signature over message by TKey (on stdout):\n")
-	fmt.Printf("%x\n", signature)
-
-	return nil
+	return &signer, pubkey, nil
 }
 
-func handleSignals(action func(), sig ...os.Signal) {
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, sig...)
-	go func() {
-		for {
-			<-ch
-			action()
-		}
-	}()
-}
+func usage() {
+	desc := fmt.Sprintf(`Usage:
 
-func readBuildInfo() string {
-	var v string
+%[1]s -h/--help
 
-	if info, ok := debug.ReadBuildInfo(); ok {
-		sb := strings.Builder{}
-		sb.WriteString("devel")
-		for _, setting := range info.Settings {
-			if strings.HasPrefix(setting.Key, "vcs") {
-				sb.WriteString(fmt.Sprintf(" %s=%s", setting.Key, setting.Value))
-			}
-		}
-		v = sb.String()
-	}
-	return v
+%[1]s -G/--getkey -p/--public pubkey [-d/--port device] [-f/--force] [-s/--speed speed] [--uss] [--uss-file ussfile] [--verbose] 
+
+%[1]s -S/--sign -m message -p/--public pubkey [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
+
+%[1]s -V/--verify -m message -p/--public pubkey [-x sigfile]
+
+%[1]s --version
+
+%[1]s signs (-S) or verifies (-V) the signature of a message in a
+file. The message will be hashed with SHA-512 and either signed using
+the TKey's private key or verified given the public key. The signing
+algorithm is Ed25519.
+
+Exit status code is 0 if everything went well or non-zero if unsuccessful.
+
+Alternatively, -G/--getkey can be used to receive the public key of
+the signer app on the TKey. Specify where to store it with -p key.pub`,
+		os.Args[0])
+
+	le.Printf("%s\n\n%s", desc,
+		pflag.CommandLine.FlagUsagesWrapped(86))
 }
 
 func main() {
-	var fileName, fileUSS, fileSignature, filePubkey, devPath string
-	var speed int
-	var enterUSS, showPubkeyOnly, verbose, helpOnly, helpOnlySign, helpOnlyVerify, versionOnly bool
-
-	signString := "sign"
-	verifyString := "verify"
+	var cmd command
+	var cmdArgs int
+	getKey := pflag.BoolP("getkey", "G", false, "Get public key.")
+	sign := pflag.BoolP("sign", "S", false, "Sign the message.")
+	verify := pflag.BoolP("verify", "V", false, "Verify signature of the message.")
+	force := pflag.BoolP("force", "f", false, "Force writing of signature and pubkey files, overwriting any existing files.")
+	keyFile := pflag.StringP("public", "p", "", "Public key `pubkey`.")
+	sigFile := pflag.StringP("sig", "x", "", "Signature `sigfile`.")
+	messageFile := pflag.StringP("message", "m", "", "Specify file containing `message`.")
+	devPath := pflag.StringP("port", "d", "",
+		"Set serial port `device`. If this is not used, auto-detection will be attempted.")
+	speed := pflag.IntP("speed", "s", tkeyclient.SerialSpeed,
+		"Set serial port `speed` in bits per second.")
+	enterUss := pflag.Bool("uss", false,
+		"Enable typing of a phrase to be hashed as the User Supplied Secret. The USS is loaded onto the TKey along with the app itself. A different USS results in different public/private keys.")
+	ussFile := pflag.String("uss-file", "",
+		"Read `ussfile` and hash its contents as the USS. Use '-' (dash) to read from stdin. The full contents are hashed unmodified (e.g. newlines are not stripped).")
+	versionOnly := pflag.BoolP("version", "v", false, "Output version information.")
+	helpOnly := pflag.BoolP("help", "h", false, "Output this help.")
 
 	if version == "" {
 		version = readBuildInfo()
 	}
 
-	// Default text to show
-	root := pflag.NewFlagSet("root", pflag.ExitOnError)
-	root.BoolVar(&versionOnly, "version", false, "Output version information.")
-	root.BoolVar(&helpOnly, "help", false, "Give help text.")
-	root.Usage = func() {
-		desc := fmt.Sprintf(`%[1]s signs the data provided in FILE (the "message")
-using the Tillitis TKey. The message will be hashed using
-SHA512 and signed with Ed25519 using the TKey's private key.
+	pflag.BoolVar(&verbose, "verbose", false, "Enable verbose output.")
+	pflag.Usage = usage
+	pflag.Parse()
 
-It is also possible to verify signatures with this tool, provided
-the message, signature and public key.
-
-Usage:
-  %[1]s <command> [flags] FILE...
-
-Commands:
-  sign        Create a signature
-  verify      Verify a signature
-
-Use <command> --help for further help, i.e. %[1]s verify --help`, os.Args[0])
-		le.Printf("%s\n\n%s", desc,
-			root.FlagUsagesWrapped(86))
-	}
-
-	// Flag for command "sign"
-	cmdSign := pflag.NewFlagSet(signString, pflag.ExitOnError)
-	cmdSign.SortFlags = false
-	cmdSign.BoolVarP(&showPubkeyOnly, "show-pubkey", "p", false,
-		"Don't sign anything, only output the public key.")
-	cmdSign.StringVar(&devPath, "port", "",
-		"Set serial port device `PATH`. If this is not passed, auto-detection will be attempted.")
-	cmdSign.IntVar(&speed, "speed", tkeyclient.SerialSpeed,
-		"Set serial port speed in `BPS` (bits per second).")
-	cmdSign.BoolVar(&enterUSS, "uss", false,
-		"Enable typing of a phrase to be hashed as the User Supplied Secret. The USS is loaded onto the TKey along with the app itself. A different USS results in different public/private keys, meaning a different identity.")
-	cmdSign.StringVar(&fileUSS, "uss-file", "",
-		"Read `FILE` and hash its contents as the USS. Use '-' (dash) to read from stdin. The full contents are hashed unmodified (e.g. newlines are not stripped).")
-	cmdSign.BoolVar(&verbose, "verbose", false, "Enable verbose output.")
-	cmdSign.BoolVarP(&helpOnlySign, "help", "h", false, "Output this help.")
-	cmdSign.Usage = func() {
-		desc := fmt.Sprintf(`Usage: %[1]s sign [flags...] FILE
-
-  Signs the data provided in FILE (the "message"). The message will be
-  hashed with SHA512 and signed with Ed25519 using the TKey's private key.
-
-  The signature is always output on stdout. Exit status code is 0 if everything
-  went well and the signature can be verified using the public key. Otherwise
-  exit code is non-zero.
-
-  Alternatively, --show-pubkey can be used to only output (on stdout) the
-  public key of the signer app on the TKey.`, os.Args[0])
-		le.Printf("%s\n\n%s", desc,
-			cmdSign.FlagUsagesWrapped(86))
-	}
-
-	// Flag for command "verify"
-	cmdVerify := pflag.NewFlagSet(verifyString, pflag.ExitOnError)
-	cmdVerify.SortFlags = false
-	cmdVerify.BoolVarP(&helpOnlyVerify, "help", "h", false, "Output this help.")
-	cmdVerify.Usage = func() {
-		desc := fmt.Sprintf(`Usage: %[1]s verify FILE SIG-FILE PUBKEY-FILE
-
-  Verifies wheather the Ed25519 signature of the message is valid
-  using the public key. Does not need a connected TKey to verify.
-
-  SIG-FILE is expected to be an 64 bytes Ed25519 signature in hex.
-  PUBKEY-FILE is expected to be an 64 bytes Ed25519 public key in hex.
-
-  The return value is 0 if the signature is valid, otherwise non-zero.
-  Newlines will be striped from the input files. `, os.Args[0])
-		le.Printf("%s\n\n%s", desc,
-			cmdVerify.FlagUsagesWrapped(86))
-	}
-
-	if len(os.Args) == 1 {
-		root.Usage()
+	if pflag.NArg() > 0 {
+		le.Printf("Unexpected argument: %s\n\n", strings.Join(pflag.Args(), " "))
+		pflag.Usage()
 		os.Exit(2)
 	}
 
-	// version? Print and exit
-	if len(os.Args) == 2 {
-		if err := root.Parse(os.Args); err != nil {
-			le.Printf("Error parsing input arguments: %v\n", err)
-			os.Exit(2)
-		}
-		if versionOnly {
-			fmt.Printf("tkey-sign %s\n", version)
-			os.Exit(0)
-		}
-
-		if helpOnly {
-			root.Usage()
-			os.Exit(0)
-		}
+	if *versionOnly {
+		le.Printf("tkey-sign %s", version)
+		os.Exit(0)
 	}
 
-	switch os.Args[1] {
-	case signString:
-		if err := cmdSign.Parse(os.Args[2:]); err != nil {
-			le.Printf("Error parsing input arguments: %v\n", err)
-			os.Exit(2)
+	if *helpOnly {
+		pflag.Usage()
+		os.Exit(0)
+
+	}
+
+	if *getKey {
+		cmd = cmdGetKey
+		cmdArgs++
+	}
+
+	if *sign {
+		cmd = cmdSign
+		cmdArgs++
+	}
+
+	if *verify {
+		cmd = cmdVerify
+		cmdArgs++
+	}
+
+	if cmdArgs > 1 {
+		pflag.Usage()
+		os.Exit(1)
+	}
+
+	switch cmd {
+	case cmdGetKey:
+		if *keyFile == "" {
+			le.Printf("Provide public key file with -p pubkey")
+			os.Exit(1)
 		}
 
-		if helpOnlySign {
-			cmdSign.Usage()
-			os.Exit(0)
-		}
-
-		if cmdSign.NArg() > 0 {
-			if cmdSign.NArg() > 1 {
-				le.Printf("Unexpected argument: %s\n\n", strings.Join(cmdSign.Args()[1:], " "))
-				cmdSign.Usage()
-				os.Exit(2)
-			}
-			fileName = cmdSign.Args()[0]
-		}
-
-		if fileName == "" && !showPubkeyOnly {
-			le.Printf("Please pass at least a message FILE, or -p.\n\n")
-			cmdSign.Usage()
-			os.Exit(2)
-		}
-
-		if fileName != "" && showPubkeyOnly {
-			le.Printf("Pass only a message FILE or -p.\n\n")
-			cmdSign.Usage()
-			os.Exit(2)
-		}
-
-		if enterUSS && fileUSS != "" {
-			le.Printf("Pass only one of --uss or --uss-file.\n\n")
-			cmdSign.Usage()
-			os.Exit(2)
-		}
-
-		err := doSign(devPath, verbose, fileName, fileUSS, enterUSS, showPubkeyOnly, speed)
+		signer, pub, err := loadSigner(*devPath, *speed, *ussFile, *enterUss)
 		if err != nil {
-			le.Printf("Error signing: %v\n", err)
+			le.Printf("Couldn't load signer: %v", err)
 			os.Exit(1)
 		}
-		os.Exit(0)
 
-	case verifyString:
-		if err := cmdVerify.Parse(os.Args[2:]); err != nil {
-			le.Printf("Error parsing input arguments: %v\n", err)
-			os.Exit(2)
+		pubkey := pubKey{
+			Alg:    [2]byte{'E', 'd'},
+			KeyNum: [8]byte{1, 7},
+			Key:    [32]byte{},
 		}
 
-		if helpOnlyVerify {
-			cmdVerify.Usage()
-			os.Exit(0)
+		copy(pubkey.Key[:], pub)
+
+		comment := "tkey public key"
+		if *force {
+			err = writeBase64(*keyFile, pubkey, comment, true)
+		} else {
+			err = writeRetry(*keyFile, pubkey, comment)
 		}
 
-		if cmdVerify.NArg() < 3 {
-			le.Printf("Missing %d input file(s) to verify signature.\n\n", 3-cmdVerify.NArg())
-			cmdVerify.Usage()
-			os.Exit(2)
-		} else if cmdVerify.NArg() > 3 {
-			le.Printf("Unexpected argument: %s\n\n", strings.Join(cmdVerify.Args()[3:], " "))
-			cmdVerify.Usage()
-			os.Exit(2)
-		}
-		fileName = cmdVerify.Args()[0]
-		fileSignature = cmdVerify.Args()[1]
-		filePubkey = cmdVerify.Args()[2]
-
-		le.Printf("Verifying signature ...\n")
-		if err := verifySignature(fileName, fileSignature, filePubkey); err != nil {
-			le.Printf("Error verifying: %v\n", err)
+		if err != nil {
+			le.Printf("%v", err)
+			signer.Close()
 			os.Exit(1)
 		}
-		le.Printf("Signature verified.\n")
-		os.Exit(0)
+
+		signer.Close()
+
+	case cmdSign:
+		if *messageFile == "" {
+			le.Printf("Provide message file with -m message")
+			os.Exit(1)
+		}
+
+		if *keyFile == "" {
+			le.Printf("Provide public key file with -p pubkey")
+			os.Exit(1)
+		}
+
+		if *sigFile == "" {
+			*sigFile = *messageFile + ".sig"
+		}
+
+		pubkey, err := readKey(*keyFile)
+		if err != nil {
+			le.Printf("Couldn't read pubkey file: %v", err)
+			os.Exit(1)
+		}
+
+		signer, pub, err := loadSigner(*devPath, *speed, *ussFile, *enterUss)
+		if err != nil {
+			le.Printf("Couldn't load signer: %v", err)
+			os.Exit(1)
+		}
+
+		if !bytes.Equal(pub, pubkey.Key[:]) {
+			le.Printf("Public key from file %v not equal to loaded app's", *keyFile)
+			os.Exit(1)
+		}
+
+		sig, err := signFile(*signer, pub, *messageFile)
+		if err != nil {
+			le.Printf("signing failed: %v", err)
+			signer.Close()
+			os.Exit(1)
+		}
+
+		comment := fmt.Sprintf("verify with %v", *keyFile)
+		if *force {
+			err = writeBase64(*sigFile, sig, comment, true)
+		} else {
+			err = writeRetry(*sigFile, sig, comment)
+		}
+
+		if err != nil {
+			le.Printf("Couldn't store signature: %v", err)
+			signer.Close()
+			os.Exit(1)
+		}
+
+		signer.Close()
+
+	case cmdVerify:
+		if *messageFile == "" {
+			le.Printf("Provide message file with -m message")
+			os.Exit(1)
+		}
+
+		if *keyFile == "" {
+			le.Printf("Provide public key file path with -p pubkey")
+			os.Exit(1)
+		}
+
+		if *sigFile == "" {
+			*sigFile = *messageFile + ".sig"
+		}
+
+		err := verifySignature(*messageFile, *sigFile, *keyFile)
+		if err != nil {
+			le.Printf("Error verifying: %v", err)
+			os.Exit(1)
+		}
+		le.Printf("Signature verified")
 
 	default:
-		root.Usage()
-		le.Printf("%q is not a valid subcommand.\n", os.Args[1])
+		pflag.Usage()
 		os.Exit(2)
 	}
-	os.Exit(1) // should never be reached
+
+	// Success
+	os.Exit(0)
 }

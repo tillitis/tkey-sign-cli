@@ -3,55 +3,88 @@
 
 # tkey-sign
 
-`tkey-sign` is a utility that can do and verify an Ed25519
-cryptographic signature over a digest of a file using the
-[Tillitis](https://tillitis.se/) TKey. It uses the [signer device
-app](https://github.com/tillitis/tkey-device-signer) for the actual
-signatures.
-
-It can also verify a signature by passing files with the message,
-signature, and the public key as arguments.
+`tkey-sign` creates and verifies cryptographic signatures of files.
+The signature is created by the [signer device
+app](https://github.com/tillitis/tkey-device-signer) running on the
+[Tillitis](https://tillitis.se/) TKey. The signer is automatically
+loaded into the TKey by `tkey-sign` when signing or extracting the
+public key. The measured private key never leaves the TKey.
 
 See [Release notes](RELEASE.md).
 
 ## Usage
 
-```
-$ tkey-sign <command> [flags...] FILE...
-```
-
-Commands are:
-```
-  sign        Create a signature
-  verify      Verify a signature
-```
-
-Usage for the sign-command are:
-```
-$ tkey-sign sign [flags...] FILE
-```
-with options:
+Get a public key, possibly modifying the key pair by using a User
+Supplied Secret, and storing the public key in file `-p pubkey`.
 
 ```
-  -p, --show-pubkey     Don't sign anything, only output the public key.
-      --port PATH       Set serial port device PATH. If this is not passed,
-                        auto-detection will be attempted.
-      --speed BPS       Set serial port speed in BPS (bits per second). (default
-                        62500)
-      --uss             Enable typing of a phrase to be hashed as the User
-                        Supplied Secret. The USS is loaded onto the TKey along
-                        with the app itself. A different USS results in
-                        different public/private keys, meaning a different identity.
-      --uss-file FILE   Read FILE and hash its contents as the USS. Use '-'
-                        (dash) to read from stdin. The full contents are hashed
-                        unmodified (e.g. newlines are not stripped).
-      --verbose         Enable verbose output.
-  -h, --help            Output this help.
+tkey-sign -G/--getkey [-d/--port device] [-s/--speed speed]
+[--uss] [--uss-file secret] -p/--public pubkey
 ```
 
-Usage for the verify-command are:
+Sign a file, specified with `-m message` , possibly modifying the
+measured key pair by using a User Supplied Secret, and storing the
+signature in `-x sigfile` or, by default, in `message.sig`. You need
+to supply the public key file as well which `tkey-sign` will
+automatically verify that it's the expected public key.
+
 ```
-$ tkey-sign verify FILE SIG-FILE PUBKEY-FILE
+tkey-sign -S/--sign [-d/--port device] [-s speed] -m message
+[--uss] [--uss-file] -p/--public pubkey [-x sig-file]
+```
+
+Verify a signature of file `-m message` with public key in `-p pubkey`.
+Signature is by default in `message.sig` but can be specified
+with `-x sigfile`. Doesn't need a connected TKey.
+
+```
+tkey-sign -V/--verify -m message -p/--public pubkey [-x sigfile]
+```
+
+Alternatively you can use OpenBSD's *signify(1)* to verify the
+signature but you need to compute the SHA-512 of the file first and
+feed that to the verification. We provide a handy script that does
+this:
+
+```
+signify-verify message pubkey
+```
+
+Exit code is 0 on success and non-zero on failure.
+
+See the manual page for details.
+
+## Examples
+
+All examples either load the device app automatically or works with an
+already loaded device app.
+
+Store the public key in a file.
+```
+$ tkey-sign -G -p key.pub
+```
+
+Sign a file using the signer's basic secret or the identity of an
+already loaded signer while also checking that you have the right
+public key in a file:
+
+```
+$ tkey-sign -S -m message.txt -p key.pub
+```
+
+Verify a signature over a message file with the signature in the
+default "message.txt.sig" file:
+
+```
+$ tkey-sign -V -p key.pub -m message.txt
+```
+
+or
+
+```
+$ signify-verify message.txt key.pub
+Signature Verified
+$
 ```
 
 ## Building

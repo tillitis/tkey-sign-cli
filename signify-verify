@@ -1,0 +1,30 @@
+#! /bin/sh
+
+# Copyright (C) 2022, 2023 - Tillitis AB
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Use signify to verify a tkey-sign signature by hashing the file
+# content and checking the signature against the digest.
+# Usage:
+#
+# $ signify-verify MESSAGE PUBKEY
+
+if [ $# -ne 2 ]
+then
+    echo "Usage: signify-verify MESSAGE PUBKEY"
+    exit 1
+fi
+
+uname=$(uname)
+if [[ "${uname}" == "Darwin"* ]]
+then
+    sha="shasum -a 512"
+else
+    sha=sha512sum
+fi
+
+digestfile=$(mktemp /tmp/tkey-sign-digest.XXXXXX)
+sigfile="${1}".sig
+${sha} ${1} > ${digestfile}
+signify -V -m ${digestfile} -x ${sigfile} -p ${2}
+rm ${digestfile}

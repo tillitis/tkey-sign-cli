@@ -2,78 +2,132 @@ tkey-sign(1)
 
 # NAME
 
-tkey-sign - A hardware-backed digital signature command
+tkey-sign - Create or verify digital signatures with the Tillitis TKey
 
 # SYNOPSIS
 
-*tkey-sign* sign [options...] FILE
+*tkey-sign* -h/--help
 
-*tkey-sign* verify [options...] FILE SIG-FILE PUBKEY-FILE
+*tkey-sign* -G/--getkey -p/--public pubkey [-d/--port device] [-f/--force] [-s/--speed speed] [--uss] [--uss-file ussfile] [--verbose]
+
+*tkey-sign* -S/--sign -m message -p/--public pubkey [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
+
+*tkey-sign* -V/--verify -m message -p/--public pubkey [--verbose] [-x sigfile]
+
+*tkey-sign* --version
 
 # DESCRIPTION
 
-*tkey-sign* is a hardware-backed digital signature command using the
-Tillitis TKey and the *signer* device app.
+*tkey-sign* creates (-S) and verifies (-V) cryptographic signatures of
+files. The signature is created by the *signer* device app running on
+the Tillitis TKey. The signer is automatically loaded into the TKey
+when signing or extracting the public key.
 
-# OPTIONS
+*-G, --getkey*
 
-Common options for both commands:
+	Load device app (if not already loaded) and output its public key into
+	a file. Pass the filename to store the public key in with *-p pubkey*.
+	Combine with *--uss* or *--uss-file ussfile* to change the key pair.
+
+*-S, --sign*
+
+	Load device app (if not already loaded) and sign the specified message
+	file (*-m message*). Store a signature in a file. Default signature
+	file is message file + ".sig", specify another filename with *-x
+	sigfile*. Also needs *-p pubkey* which is used for the comment in the
+	sigfile and to verify that you really have the same public key as the
+	loaded device app.
+
+	Combine with *--uss* or *--uss-file ussfile* to change the key pair.
+
+*-V, --verify*
+
+	Verify the signature of message. Does not need a connected TKey.
+	Needs *-m message* and *-p pubkey*. Default signature file is message.sig.
+	Specify with *-x sigfile*.
+
+*-d, --port device*
+
+	Specify the device path for the TKey, typically something like
+	*/dev/ttyACM0*. By default the device is auto-detected.
+
+*-f, --force*
+
+	Force writing signature and pubkey file, overwriting existing files.
 
 *-h, --help*
 
-	Output help text.
+	Output short help text.
+
+*-m message*
+
+	When signing, the file containing the message to sign.
+	When verifying, the file containing the message to verify.
+
+*-p, --public pubkey*
+
+	Specify path to public key file.
+
+*-s, --speed speed*
+
+	Specify the speed in bits/second for the TKey device. Default is
+	62500 b/s.
+
+*--uss*
+
+	Interactively enter a User Supplied Secret to be used when loading
+	a device app to the TKey. This is used to create different key
+	pairs. A warning is printed if the app is already loaded and this
+	USS is not used.
+
+*--uss-file secret*
+
+	Use a User Supplied Secret in a file to be used when loading a
+	device app to the TKey. This is used to create different key
+	pairs. A warning is printed if the app is already loaded and this
+	USS is not used. Use *-* to input from stdin.
+
+*--verbose*
+
+	Be very verbose about what is happening, including hexdumps of
+	traffic to and from the TKey.
 
 *--version*
 
 	Output version information and quit.
 
-# COMMANDS
+*-x sigfile*
 
-## sign
+	The signature file to create or use with verification. The default
+	when not using *-x* is *message.sig*.
 
-*tkey-sign* sign [-p] [--port PATH] [--speed BPS] [--uss] [--uss-file
-FILE] [--verbose]
+# FORMATS
 
-*-p*, *--port PATH*
+Signature files are expected to contain a one-line comment beginning
+with "untrusted comment: ", then encoded in BASE64:
 
-	Set serial port device PATH. If this is not passed, auto-detection
-	will be attempted.
+- 2 byte algorithm identifier, so far only "Ed" for Ed25519.
+- 8 byte key number (unused by tkey-sign).
+- 64 byte Ed25519 signature.
 
+Pubkey files are expected to contain, a one-line comment beginning
+with "untrusted comment: ", then encoded in BASE64:
 
-*--speed BPS*
+- 2 byte algorithm identifier, so far only "Ed" for Ed25519.
+- 8 byte key number (unused by tkey-sign).
+- 32 byte Ed25519 public key.
 
-	Set serial port speed to BPS b/s. Default is 62500 b/s.
+# EXIT STATUS
 
-*--uss*
+The exit code is 0 on success and >0 if an error occurs.
 
-	Ask for a phrase to be hashed as the User Supplied Secret. The
-	USS is loaded onto the TKey along with the app itself. A
-	different USS results in different different cryptographic key
-	pair used for signing.
+It may fail because of one of the following reasons:
 
-*--uss-file FILE*
-
-	Read FILE and hash its contents as the USS. Use '-' (dash) to read
-	from stdin. The full contents are hashed unmodified (e.g. newlines
-	are not stripped).
-
-*--verbose*
-
-	Be more verbose, including reporting progress when writing to
-	a file.
-
-## verify
-
-*tkey-sign* verify FILE SIG-FILE PUBKEY-FILE
-
-Verifies the Ed25519 signature of FILE. Does not need a connected TKey
-to verify.
-
-SIG-FILE is expected to be 64 bytes Ed25519 signature in hex.
-PUBKEY-FILE is expected to be 32 bytes Ed25519 public key in hex.
-
-The exit code is 0 if the signature is valid, otherwise non-zero.
-Newlines will be stripped from the input files.
+- Connection with or uploading of the app to the TKey failed.
+- Some necessary files do not exist.
+- File parse error.
+- Public key of device app doesn't match public key file.
+- The computed message file signature does not match the signature file.
 
 # CONFIGURATION
 
@@ -114,27 +168,38 @@ working in.
 
 # EXAMPLES
 
-```
-$ tkey-sign sign --uss Makefile
-Auto-detected serial port /dev/ttyACM0
-Connecting to TKey on serial port /dev/ttyACM0 ...
-Enter phrase for the USS:
-Repeat the phrase:
-Signer app loaded.
-Public Key from TKey: c06f2c8a0616b833640d450e56fe0cc04718569a5dac9c2b8c53ce55efd93f88
-SHA512 hash: f0d89ef5c2594f5d9246128187e31bb99ee2f0631b5fad17293f3fff2a2b4f6238e52a282f28c6fd80a03ad2128183c6ded6e36faf3a1e4073a12cd6fb004681
-The TKey will flash green when touch is required ...
-Signature over message by TKey (on stdout):
-7816315d8e746e935fe7399ccb323e343c9e17b4421501ce031bac577c914cc55413a6fc8526b3b0071de6a290fb2840d051e98286a81d23bd1068dce2179000
-```
+All examples either load the device app automatically or works with an
+already loaded device app.
+
+Store the public key in a file. When loading the device app modify the
+measured identity with a User Supplied Secret. The public key file `key.pub`
+already exists so `tkey-sign` asks if it should replace it.
 
 ```
-$ tkey-sign verify Makefile sig pubkey
-Verifying signature ...
-Public key: c06f2c8a0616b833640d450e56fe0cc04718569a5dac9c2b8c53ce55efd93f88
-Signature: 7816315d8e746e935fe7399ccb323e343c9e17b4421501ce031bac577c914cc55413a6fc8526b3b0071de6a290fb2840d051e98286a81d23bd1068dce2179000
-SHA512 hash: f0d89ef5c2594f5d9246128187e31bb99ee2f0631b5fad17293f3fff2a2b4f6238e52a282f28c6fd80a03ad2128183c6ded6e36faf3a1e4073a12cd6fb004681
-Signature verified.
+$ tkey-sign -G -p key.pub --uss
+Enter phrase for the USS:
+Repeat the phrase:
+File key.pub exists. Overwrite [y/n]?
+y
+$
+```
+
+Sign a file. The program warns that the *signer* device app is already
+loaded, probably from the above command.
+
+```
+./tkey-sign -S -m message -p key.pub
+WARNING: App already loaded.
+$
+```
+
+Verify a signature over a message file with the signature in the
+default "message.sig" file:
+
+```
+$ tkey-sign -V -m message -p key.pub
+Signature verified
+$
 ```
 
 # SEE ALSO
