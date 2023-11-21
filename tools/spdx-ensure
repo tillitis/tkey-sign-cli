@@ -26,6 +26,7 @@ README.md
 RELEASE.md
 build.sh
 build-podman.sh
+cmd/tkey-sign/signer.bin-v0.0.7
 doc/tkey-sign.1
 doc/tkey-sign.scd
 go.mod

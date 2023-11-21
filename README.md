@@ -87,11 +87,23 @@ Signature Verified
 $
 ```
 
-## Building
+## Build & install
 
-You have two options, either our OCI image
-`ghcr.io/tillitis/tkey-builder` for use with a rootless podman setup,
-or native tools.
+The easiest way is to:
+
+```
+$ go install github.com/tillitis/tkey-sign-cli/cmd/tkey-sign@latest
+```
+
+After this the `tkey-sign` command should be available in your
+`$GOBIN` directory.
+
+Note that this doesn't set the version and other stuff you get if you
+use `make`.
+
+If you want to build it all, including the signer device app, you have
+two options, either our OCI image `ghcr.io/tillitis/tkey-builder` for
+use with a rootless podman setup, or native tools.
 
 With podman you should be able to use:
 
@@ -108,14 +120,14 @@ With native tools you should be able to use our build script:
 $ ./build.sh
 ```
 
-Both of these also clones and builds the [TKey device
+Both of these scripts also clones and builds the [TKey device
 libraries](https://github.com/tillitis/tkey-libs) and the [signer
 device app](https://github.com/tillitis/tkey-device-signer) first.
 
 If you want to do it manually please inspect the build script, but
 basically you clone the `tkey-libs` and `tkey-device-signer` repos,
-build the signer, copy it's `app.bin` to `cmd/tkey-sign/signer.bin`
-and run `make`.
+build the signer, copy it's `app.bin` to
+`cmd/tkey-sign/signer.bin-${signer_version}` and run `make`.
 
 You can install `tkey-sign` and reload the udev rules to get access to
 the TKey with:
@@ -134,6 +146,26 @@ apt install podman rootlesskit slirp4netns
 ```
 
 should be enough to get you a working Podman setup.
+
+### Building with another signer
+
+For convenience, and to be able to support `go install` the signer
+device app binary is included in `cmd/tkey-sign`.
+
+If you want to replace the signer used you have to:
+
+1. Compile your own signer and place it in `cmd/tkey-sign`.
+2. Change the path to the embedded signer in `cmd/tkey-sign/main.go`.
+   Look for `go:embed...`.
+3. Compute a new SHA-512 hash digest for your binary, typically by
+   something like `sha512sum cmd/tkey-sign/signer.bin-v0.0.7` and put
+   the resulting output in the file `signer.bin.sha512` at the top
+   level.
+4. `make` in the top level.
+
+If you want to use the `build.sh` and `build-podman.sh` scripts you
+have to change the `signer_version` variable and the URL used to clone
+the signer device app repo.
 
 ## Licenses and SPDX tags
 
