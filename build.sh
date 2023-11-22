@@ -8,14 +8,14 @@ printf "Building signer with version: %s\n" "$signer_version"
 
 if [ -d ../tkey-libs ]
 then
-    (cd ../tkey-libs; git checkout "$tkey_libs_version")
+    (cd ../tkey-libs; git checkout main; git pull; git checkout "$tkey_libs_version")
 else
     git clone -b "$tkey_libs_version" https://github.com/tillitis/tkey-libs.git ../tkey-libs
 fi
 
 if [ -d ../tkey-device-signer ]
 then
-    (cd ../tkey-device-signer; git checkout "$signer_version")
+    (cd ../tkey-device-signer; git checkout main; git pull; git checkout "$signer_version")
 else
     git clone -b "$signer_version" https://github.com/tillitis/tkey-device-signer.git ../tkey-device-signer
 fi
