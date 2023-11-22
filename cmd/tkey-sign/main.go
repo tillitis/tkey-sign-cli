@@ -34,7 +34,7 @@ const (
 // nolint:typecheck // Avoid lint error when the embedding file is missing.
 // Build copies the built signer here
 //
-//go:embed signer.bin-v0.0.7
+//go:embed signer.bin-v0.0.8
 var signerBinary []byte
 
 // Use when printing err/diag msgs

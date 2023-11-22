@@ -2,8 +2,8 @@
 
 set -e
 
-tkey_libs_version="v0.0.1"
-signer_version="v0.0.7"
+tkey_libs_version="v0.0.2"
+signer_version="v0.0.8"
 
 printf "Building tkey-libs with version: %s\n" "$tkey_libs_version"
 printf "Building signer with version: %s\n" "$signer_version"
