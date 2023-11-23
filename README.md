@@ -101,6 +101,25 @@ After this the `tkey-sign` command should be available in your
 Note that this doesn't set the version and other stuff you get if you
 use `make`.
 
+### Reproducible builds
+
+We're currently building release builds with
+[goreleaser](https://goreleaser.com/) using Go 1.19.13.
+
+You should be able to build a binary that is a bit exact reproduction
+of our release binaries if you use the same Go compiler, at least for
+the statically linked Linux and Windows binaries.
+
+On macOS `tkey-sign` is unfortunately not statically linked. The
+binary was built on macOS with uname:
+
+```
+Darwin Kernel Version 22.6.0: Wed Jul  5 22:21:53 PDT 2023;
+root:xnu-8796.141.3~6/RELEASE_ARM64_T6020 arm64
+```
+
+### Build everything
+
 If you want to build it all, including the signer device app, you have
 two options, either our OCI image `ghcr.io/tillitis/tkey-builder` for
 use with a rootless podman setup, or native tools.
@@ -113,6 +132,9 @@ $ ./build-podman.sh
 
 which requires at least `git` and `make` besides podman. See below for
 setting things up.
+
+Please note that the Go version in the OCI image is temporarily not
+the same as the release process!
 
 With native tools you should be able to use our build script:
 
