@@ -23,11 +23,14 @@ builds:
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
 
     # Custom ldflags mostly to avoid setting main.date which for some
     # reason is default
     ldflags:
-      -s -w -X main.version={{ .Version }}
+      -w -X main.version={{ .Version }} -X main.signerAppNoTouch= -buildid=
+
   - id: darwin
     main: ./cmd/tkey-sign
     binary: tkey-sign
@@ -41,11 +44,13 @@ builds:
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
 
     # Custom ldflags mostly to avoid setting main.date which for some
     # reason is default
     ldflags:
-      -s -w -X main.version={{ .Version }}
+      -w -X main.version={{ .Version }} -X main.signerAppNoTouch= -buildid=
 
   - id: windows
     main: ./cmd/tkey-sign
@@ -60,11 +65,13 @@ builds:
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
 
     # Custom ldflags mostly to avoid setting main.date which for some
     # reason is default
     ldflags:
-      -s -w -X main.version={{ .Version }}
+      -w -X main.version={{ .Version }} -X main.signerAppNoTouch= -buildid=
 
 universal_binaries:
   -
