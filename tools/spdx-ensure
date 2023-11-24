@@ -12,7 +12,6 @@ tag="SPDX-License-Identifier:"
 
 missingok_dirs=(
 .github/workflows/
-debian/
 )
 
 missingok_files=(
