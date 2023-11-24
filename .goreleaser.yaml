@@ -157,7 +157,7 @@ winget:
     #
     # Default: ProjectName
     # Templates: allowed
-    #name: myproject
+    name: TKeySign
 
     # Publisher name.
     #
