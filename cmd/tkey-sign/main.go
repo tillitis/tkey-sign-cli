@@ -27,6 +27,7 @@ type command int
 const (
 	cmdUnknown = iota
 	cmdGetKey
+	cmdGetFW
 	cmdSign
 	cmdVerify
 )
@@ -105,6 +106,18 @@ func signFile(signer tkeysign.Signer, pubkey []byte, fileName string) (*signatur
 	copy(s.Sig[:], sig)
 
 	return &s, nil
+}
+
+// getFW asks signer to hash the length part of the firmware
+//
+// It returns the BLAKE2s digest on success or an error.
+func getFW(signer tkeysign.Signer, len int) ([]byte, error) {
+	digest, err := signer.GetFWDigest(len)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return digest, nil
 }
 
 // verifySignature verifies a Ed25519 signature stored in sigFile over
@@ -263,6 +276,7 @@ func main() {
 	var cmd command
 	var cmdArgs int
 	getKey := pflag.BoolP("getkey", "G", false, "Get public key.")
+	getFirmware := pflag.BoolP("getfw", "F", false, "Get firmware digest.")
 	sign := pflag.BoolP("sign", "S", false, "Sign the message.")
 	verify := pflag.BoolP("verify", "V", false, "Verify signature of the message.")
 	force := pflag.BoolP("force", "f", false, "Force writing of signature and pubkey files, overwriting any existing files.")
@@ -307,6 +321,11 @@ func main() {
 
 	if *getKey {
 		cmd = cmdGetKey
+		cmdArgs++
+	}
+
+	if *getFirmware {
+		cmd = cmdGetFW
 		cmdArgs++
 	}
 
@@ -358,6 +377,18 @@ func main() {
 			signer.Close()
 			os.Exit(1)
 		}
+
+		signer.Close()
+
+	case cmdGetFW:
+		signer, _, err := loadSigner(*devPath, *speed, *ussFile, *enterUss)
+		if err != nil {
+			le.Printf("Couldn't load signer: %v", err)
+			os.Exit(1)
+		}
+
+		digest, err := getFW(*signer, 4711)
+		le.Printf("digest: %x\n", digest)
 
 		signer.Close()
 
