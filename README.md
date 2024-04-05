@@ -179,11 +179,14 @@ If you want to replace the signer used you have to:
 1. Compile your own signer and place it in `cmd/tkey-sign`.
 2. Change the path to the embedded signer in `cmd/tkey-sign/main.go`.
    Look for `go:embed...`.
-3. Compute a new SHA-512 hash digest for your binary, typically by
+3. Change the `appName` directly under the `go:embed` to whatever your
+   signer is called, so the agent reports this correctly with
+   `--version`.
+4. Compute a new SHA-512 hash digest for your binary, typically by
    something like `sha512sum cmd/tkey-sign/signer.bin-v0.0.7` and put
    the resulting output in the file `signer.bin.sha512` at the top
    level.
-4. `make` in the top level.
+5. `make` in the top level.
 
 If you want to use the `build.sh` and `build-podman.sh` scripts you
 have to change the `signer_version` variable and the URL used to clone

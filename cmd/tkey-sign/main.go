@@ -8,6 +8,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha512"
 	_ "embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -37,6 +38,8 @@ const (
 //go:embed signer.bin-v0.0.8
 var signerBinary []byte
 
+const appName string = "tkey-device-signer 0.0.8"
+
 // Use when printing err/diag msgs
 var le = log.New(os.Stderr, "", 0)
 
@@ -60,6 +63,18 @@ type signature struct {
 // May be set to non-empty at build time to indicate that the signer
 // app has been compiled with touch requirement removed.
 var signerAppNoTouch string
+
+// GetEmbeddedAppName returns the name of the embedded device app.
+func GetEmbeddedAppName() string {
+	return appName
+}
+
+// GetEmbeddedAppDigest returns a string of the SHA512 digest for the embedded
+// device app
+func GetEmbeddedAppDigest() string {
+	digest := sha512.Sum512(signerBinary)
+	return hex.EncodeToString(digest[:])
+}
 
 // signFile uses the connection to the signer and produces an Ed25519
 // signature over the file in fileName. It automatically verifies the
@@ -295,7 +310,8 @@ func main() {
 	}
 
 	if *versionOnly {
-		le.Printf("tkey-sign %s", version)
+		le.Printf("tkey-sign %s\n\n", version)
+		le.Printf("Embedded device app:\n%s\nSHA512: %s\n", GetEmbeddedAppName(), GetEmbeddedAppDigest())
 		os.Exit(0)
 	}
 
