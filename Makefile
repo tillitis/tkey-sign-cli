@@ -49,7 +49,7 @@ TKEY_SIGN_VERSION ?= $(shell git describe --dirty --always | sed -n "s/^v\(.*\)/
 # .PHONY to let go-build handle deps and rebuilds
 .PHONY: tkey-sign
 tkey-sign:
-	CGO_ENABLED=$(BUILD_CGO_ENABLED) go build -ldflags "-w -X main.version=$(TKEY_SIGN_VERSION) -X main.signerAppNoTouch=$(TKEY_SIGNER_APP_NO_TOUCH)  -buildid=" -trimpath -o tkey-sign ./cmd/tkey-sign
+	CGO_ENABLED=$(BUILD_CGO_ENABLED) go build -ldflags "-w -X main.version=$(TKEY_SIGN_VERSION) -X main.signerAppNoTouch=$(TKEY_SIGNER_APP_NO_TOUCH)  -buildid=" -trimpath -buildvcs=false -o tkey-sign ./cmd/tkey-sign
 
 .PHONY: tkey-sign.exe
 tkey-sign.exe:
