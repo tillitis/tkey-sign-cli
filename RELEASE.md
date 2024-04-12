@@ -1,5 +1,20 @@
 # Release notes
 
+## v1.0.0
+
+- `--version` now also outputs version of embedded device app.
+- Builds releases and OS packages with
+  [goreleaser](https://goreleaser.com/).
+- [tkey-device-signer](https://github.com/tillitis/tkey-device-signer)
+  has been updated to v1.0.0. WARNING: Breaks CDI! Generates new key pair.
+- [tkeyclient](https://github.com/tillitis/tkeyclient) has been
+  updated to v1.0.0.
+- [tkeysign](https://github.com/tillitis/tkeysign) has been updated to
+  v1.0.0.
+
+Full
+[changelog](https://github.com/tillitis/tkey-sign-cli/compare/v0.0.8...v1.0.0).
+
 ## v0.0.8
 
 - Using version v0.0.8 of signer.bin from tkey-device-signer.
@@ -18,7 +33,7 @@ identity (CDI) compare to earlier releases, i.e., the key pair used for
 signing and verifiying will be different.
 
 Full
-[changelog](https://github.com/tillitis/tkey-device-signer/compare/v0.0.7...v0.0.8).
+[changelog](https://github.com/tillitis/tkey-sign-cli/compare/v0.0.7...v0.0.8).
 
 ## v0.0.7
 
