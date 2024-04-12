@@ -35,10 +35,10 @@ const (
 // nolint:typecheck // Avoid lint error when the embedding file is missing.
 // Build copies the built signer here
 //
-//go:embed signer.bin-v0.0.8
+//go:embed signer.bin-v1.0.0
 var signerBinary []byte
 
-const appName string = "tkey-device-signer 0.0.8"
+const appName string = "tkey-device-signer 1.0.0"
 
 // Use when printing err/diag msgs
 var le = log.New(os.Stderr, "", 0)

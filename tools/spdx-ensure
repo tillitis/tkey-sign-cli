@@ -23,9 +23,7 @@ LICENSE
 Makefile
 README.md
 RELEASE.md
-build.sh
-build-podman.sh
-cmd/tkey-sign/signer.bin-v0.0.8
+cmd/tkey-sign/signer.bin-v1.0.0
 doc/tkey-sign.1
 doc/tkey-sign.scd
 go.mod

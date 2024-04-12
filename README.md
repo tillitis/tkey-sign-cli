@@ -19,10 +19,10 @@ Supplied Secret, and storing the public key in file `-p pubkey`.
 
 ```
 tkey-sign -G/--getkey [-d/--port device] [-s/--speed speed]
-[--uss] [--uss-file secret] -p/--public pubkey
+[--uss] [--uss-file secret-file] -p/--public pubkey
 ```
 
-Sign a file, specified with `-m message` , possibly modifying the
+Sign a file, specified with `-m message`, possibly modifying the
 measured key pair by using a User Supplied Secret, and storing the
 signature in `-x sigfile` or, by default, in `message.sig`. You need
 to supply the public key file as well which `tkey-sign` will
@@ -30,7 +30,7 @@ automatically verify that it's the expected public key.
 
 ```
 tkey-sign -S/--sign [-d/--port device] [-s speed] -m message
-[--uss] [--uss-file] -p/--public pubkey [-x sig-file]
+[--uss] [--uss-file secret-file] -p/--public pubkey [-x sig-file]
 ```
 
 Verify a signature of file `-m message` with public key in `-p pubkey`.
@@ -101,73 +101,67 @@ After this the `tkey-sign` command should be available in your
 Note that this doesn't set the version and other stuff you get if you
 use `make`.
 
-### Reproducible builds
+### Building
 
-We're currently building release builds with
-[goreleaser](https://goreleaser.com/) using Go 1.19.13.
-
-You should be able to build a binary that is a bit exact reproduction
-of our release binaries if you use the same Go compiler, at least for
-the statically linked Linux and Windows binaries.
-
-On macOS `tkey-sign` is unfortunately not statically linked. The
-binary was built on macOS with uname:
+If you have Go and make installed, a simple:
 
 ```
-Darwin Kernel Version 22.6.0: Wed Jul  5 22:21:53 PDT 2023;
-root:xnu-8796.141.3~6/RELEASE_ARM64_T6020 arm64
+$ make
 ```
 
-### Build everything
-
-If you want to build it all, including the signer device app, you have
-two options, either our OCI image `ghcr.io/tillitis/tkey-builder` for
-use with a rootless podman setup, or native tools.
-
-With podman you should be able to use:
+or, for a Windows executable,
 
 ```
-$ ./build-podman.sh
+$ make tkey-sign.exe
 ```
 
-which requires at least `git` and `make` besides podman. See below for
-setting things up.
+should build `tkey-sign`. A pre-compiled signer device app binary is
+included in the repo and will be automatically embedded.
 
-Please note that the Go version in the OCI image is temporarily not
-the same as the release process!
+Cross compiling the usual Go way with `GOOS` and `GOARCH` environment
+variables works for most targets but currently doesn't work for
+`GOOS=darwin` since the `go.bug.st/serial` package relies on macOS
+shared libraries for port enumeration.
 
-With native tools you should be able to use our build script:
+### Building with tkey-builder
+
+If you want to use the tkey-builder image and you have `make` you can
+run:
 
 ```
-$ ./build.sh
+$ podman pull ghcr.io/tillitis/tkey-builder:4
+$ make podman
 ```
 
-Both of these scripts also clones and builds the [TKey device
-libraries](https://github.com/tillitis/tkey-libs) and the [signer
-device app](https://github.com/tillitis/tkey-device-signer) first.
+or run tkey-builder directly with Podman:
 
-If you want to do it manually please inspect the build script, but
-basically you clone the `tkey-libs` and `tkey-device-signer` repos,
-build the signer, copy it's `app.bin` to
-`cmd/tkey-sign/signer.bin-${signer_version}` and run `make`.
+```
+$ podman run --rm --mount type=bind,source=$(CURDIR),target=/src -w /src -it ghcr.io/tillitis/tkey-builder:4 make -j
+```
 
-You can install `tkey-sign` and reload the udev rules to get access to
-the TKey with:
+Note that building with Podman by default creates a Linux binary. Set
+`GOOS` and `GOARCH` with `-e` in the call to `podman run` to desired
+target. Again, this won't work with a macOS target.
+
+### Installing on Linux
+
+You can install `tkey-sign` and reload the Linux udev rules to get
+access to the TKey with:
 
 ```
 $ sudo make install
 $ sudo make reload-rules
 ```
 
-### Installing Podman
+### Reproducible builds
 
-On Ubuntu 22.10, running
+You should be able to build a binary that is a exact copy of our
+release binaries if you use the same Go compiler, at least for the
+statically linked Linux and Windows binaries.
 
-```
-apt install podman rootlesskit slirp4netns
-```
-
-should be enough to get you a working Podman setup.
+Please see [the official
+releases](https://github.com/tillitis/tkey-sign-cli/releases) for
+digests and details about the build environment.
 
 ### Building with another signer
 
@@ -188,9 +182,20 @@ If you want to replace the signer used you have to:
    level.
 5. `make` in the top level.
 
-If you want to use the `build.sh` and `build-podman.sh` scripts you
-have to change the `signer_version` variable and the URL used to clone
-the signer device app repo.
+## Building the signer
+
+1. See [the Devoloper Handbook](https://dev.tillitis.se/) for setup of
+   development tools. We recommend you use tkey-builder.
+2. See the instructions in the [tkey-device-signer
+   repo](https://github.com/tillitis/tkey-device-signer).
+3. Copy its `signer/app.bin` to
+   `cmd/tkey-sign/signer.bin-${signer_version}` and run `make`.
+
+To help prevent unpleasant surprises we keep a digest of the signer in
+`cmd/tkey-ssh-agent/signer.bin.sha512`. The compilation will fail if
+this is not the expected binary. If you really intended to build with
+another signer, see [Building with another
+signer](#building-with-another-signer) above.
 
 ## Licenses and SPDX tags
 
