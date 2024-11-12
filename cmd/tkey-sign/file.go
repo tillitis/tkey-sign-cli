@@ -120,7 +120,11 @@ func writeRetry(filename string, data any, comment string) error {
 		le.Printf("File %v exists. Overwrite [y/n]?", filename)
 		reader := bufio.NewReader(os.Stdin)
 		overWriteP, _ := reader.ReadString('\n')
-		if overWriteP == "y\n" {
+
+		// Trim space to normalize Windows line endings
+		overWriteP = strings.TrimSpace(overWriteP)
+
+		if overWriteP == "y" {
 			err = writeBase64(filename, data, comment, true)
 		} else {
 			le.Printf("Aborted\n")
