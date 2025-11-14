@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2025 Tillitis AB <tillitis.se>
+# SPDX-License-Identifier: BSD-2-Clause
+version = 1
+
+[[annotations]]
+path = [
+     ".editorconfig",
+     ".github/workflows/ci.yaml",
+     ".github/workflows/golangci-lint.yml",
+     ".gitignore",
+     ".golangci.yml",
+     ".goreleaser.yaml",
+     "Makefile",
+     "README.md",
+     "RELEASE.md",
+     "cmd/tkey-sign/signer.bin-v1.0.0",
+     "doc/tkey-sign.1",
+     "doc/tkey-sign.scd",
+     "go.mod",
+     "go.sum",
+     "gon.hcl",
+     "signer.bin.sha512",
+     "system/60-tkey.rules",
+]
+SPDX-FileCopyrightText = "2022 Tillitis AB <tillitis.se>"
+SPDX-License-Identifier = "BSD-2-Clause"
