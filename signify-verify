@@ -1,7 +1,7 @@
 #! /bin/sh
 
 # Copyright (C) 2022, 2023 - Tillitis AB
-# SPDX-License-Identifier: GPL-2.0-only
+# SPDX-License-Identifier: BSD-2-Clause
 
 # Use signify to verify a tkey-sign signature by hashing the file
 # content and checking the signature against the digest.

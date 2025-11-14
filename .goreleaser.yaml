@@ -134,7 +134,7 @@ nfpms:
       cryptographic signature.
 
     # Your app's license.
-    license: GPL 2.0
+    license: BSD-2-Clause
 
     # Formats to be generated.
     formats:
@@ -179,7 +179,7 @@ winget:
     #
     # Templates: allowed
     # Required.
-    license: "GPLv2"
+    license: "BSD-2-Clause"
 
     # Publisher URL.
     #
@@ -407,7 +407,7 @@ brews:
     description: "Tool to digitally sign files with TKey"
 
     # SPDX identifier of your app's license.
-    license: "GPLv2"
+    license: "BSD-2-Clause"
 
     # Setting this will prevent goreleaser to actually try to commit the updated
     # formula - instead, the formula file will be stored on the dist folder only,
