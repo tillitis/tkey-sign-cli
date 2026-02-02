@@ -18,6 +18,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/pflag"
+	"github.com/tillitis/tkey-sign-cli/signify"
 	"github.com/tillitis/tkeyclient"
 	"github.com/tillitis/tkeysign"
 	"github.com/tillitis/tkeyutil"
@@ -30,6 +31,7 @@ const (
 	cmdGetKey
 	cmdSign
 	cmdVerify
+	cmdDump
 )
 
 // nolint:typecheck // Avoid lint error when the embedding file is missing.
@@ -47,18 +49,6 @@ var (
 	version string
 	verbose = false
 )
-
-type pubKey struct {
-	Alg    [2]byte
-	KeyNum [8]byte
-	Key    [32]byte
-}
-
-type signature struct {
-	Alg    [2]byte
-	KeyNum [8]byte
-	Sig    [64]byte
-}
 
 // May be set to non-empty at build time to indicate that the signer
 // app has been compiled with touch requirement removed.
@@ -81,7 +71,7 @@ func GetEmbeddedAppDigest() string {
 // signature against the provided pubkey.
 //
 // It returns the Ed25519 signature on success or an error.
-func signFile(signer tkeysign.Signer, pubkey []byte, fileName string) (*signature, error) {
+func signFile(signer tkeysign.Signer, pubkey []byte, fileName string) (*signify.Signature, error) {
 	message, err := os.ReadFile(fileName)
 	if err != nil {
 		return nil, fmt.Errorf("ReadFile: %w", err)
@@ -103,6 +93,11 @@ func signFile(signer tkeysign.Signer, pubkey []byte, fileName string) (*signatur
 		return nil, fmt.Errorf("signing failed: %w", err)
 	}
 
+	s, err := signify.NewSignature(signify.Ed, sig)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't convert to signify signature")
+	}
+
 	if verbose {
 		le.Printf("signature: %x", sig)
 	}
@@ -111,22 +106,15 @@ func signFile(signer tkeysign.Signer, pubkey []byte, fileName string) (*signatur
 		return nil, fmt.Errorf("signature FAILED verification")
 	}
 
-	s := signature{
-		Alg:    [2]byte{'E', 'd'},
-		KeyNum: [8]byte{1, 7},
-		Sig:    [64]byte{},
-	}
-
-	copy(s.Sig[:], sig)
-
 	return &s, nil
 }
 
 // verifySignature verifies a Ed25519 signature stored in sigFile over
 // messageFile with public key in pubkeyFile
 func verifySignature(messageFile string, sigFile string, pubkeyFile string) error {
-	signature, err := readSig(sigFile)
-	if err != nil {
+	var signature signify.Signature
+
+	if err := signature.FromFile(sigFile); err != nil {
 		if errors.Is(errors.Unwrap(err), fs.ErrNotExist) {
 			return fmt.Errorf("signature file %v not found, specify with '-x sigfile'", sigFile)
 		}
@@ -134,17 +122,10 @@ func verifySignature(messageFile string, sigFile string, pubkeyFile string) erro
 		return fmt.Errorf("%w", err)
 	}
 
-	if len(signature.Sig) != 64 {
-		return fmt.Errorf("invalid length of signature. Expected 64 bytes, got %d bytes", len(signature.Sig))
-	}
+	var pubKey signify.PubKey
 
-	pubkey, err := readKey(pubkeyFile)
-	if err != nil {
+	if err := pubKey.FromFile(pubkeyFile); err != nil {
 		return fmt.Errorf("%w", err)
-	}
-
-	if len(pubkey.Key) != 32 {
-		return fmt.Errorf("invalid length of public key. Expected 32 bytes, got %d bytes", len(pubkey.Key))
 	}
 
 	message, err := os.ReadFile(messageFile)
@@ -158,7 +139,7 @@ func verifySignature(messageFile string, sigFile string, pubkeyFile string) erro
 		le.Printf("SHA512 hash: %x", digest)
 	}
 
-	if !ed25519.Verify(pubkey.Key[:], []byte(digestHex), signature.Sig[:]) {
+	if !ed25519.Verify(pubKey[:], []byte(digestHex), signature.Sig[:]) {
 		return fmt.Errorf("signature not valid")
 	}
 
@@ -388,19 +369,17 @@ func main() {
 			os.Exit(1)
 		}
 
-		pubkey := pubKey{
-			Alg:    [2]byte{'E', 'd'},
-			KeyNum: [8]byte{1, 7},
-			Key:    [32]byte{},
+		pubkey, err := signify.NewPubKey(pub)
+		if err != nil {
+			le.Printf("Couldn't convert public key from signer to Signify key\n")
+			os.Exit(1)
 		}
-
-		copy(pubkey.Key[:], pub)
 
 		comment := "tkey public key"
 		if *force {
-			err = writeBase64(*keyFile, pubkey, comment, true)
+			err = pubkey.ToFile(*keyFile, comment, true)
 		} else {
-			err = writeRetry(*keyFile, pubkey, comment)
+			err = writeRetry(*keyFile, &pubkey, comment)
 		}
 
 		if err != nil {
@@ -426,8 +405,9 @@ func main() {
 			*sigFile = *messageFile + ".sig"
 		}
 
-		pubkey, err := readKey(*keyFile)
-		if err != nil {
+		var pubKey signify.PubKey
+
+		if err := pubKey.FromFile(*keyFile); err != nil {
 			le.Printf("Couldn't read pubkey file: %v", err)
 			os.Exit(1)
 		}
@@ -448,7 +428,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		if !bytes.Equal(pub, pubkey.Key[:]) {
+		if !bytes.Equal(pub, pubKey[:]) {
 			le.Printf("Public key from file %v not equal to loaded app's", *keyFile)
 			os.Exit(1)
 		}
@@ -462,7 +442,7 @@ func main() {
 
 		comment := fmt.Sprintf("verify with %v", *keyFile)
 		if *force {
-			err = writeBase64(*sigFile, sig, comment, true)
+			err = sig.ToFile(*sigFile, comment, true)
 		} else {
 			err = writeRetry(*sigFile, sig, comment)
 		}
