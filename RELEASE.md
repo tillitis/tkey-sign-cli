@@ -1,5 +1,14 @@
 # Release notes
 
+## Upcoming release
+
+- Change to BSD2 license.
+
+- Follow REUSE specification.
+
+- Export Signify types and methods to import and export them to
+  buffers and files.
+
 ## v1.0.1
 
 - Normalize line endings of user input when asked to overwrite a file.
