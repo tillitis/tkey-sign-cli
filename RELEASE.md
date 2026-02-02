@@ -1,5 +1,10 @@
 # Release notes
 
+## Upcoming release
+
+- Export Signify types and methods to import and export them to
+  buffers and files.
+
 ## v1.1.1
 
 - Update tkeyclient to v1.3.1 to handle TKey Unlocked (product ID 8)
