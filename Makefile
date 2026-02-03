@@ -42,6 +42,10 @@ reload-rules:
 	udevadm control --reload
 	udevadm trigger
 
+.PHONY: test
+test:
+	go test ./...
+
 podman:
 	podman run --arch=amd64 --rm --mount type=bind,source=$(CURDIR),target=/src -w /src -it ghcr.io/tillitis/tkey-builder:4 make -j
 
