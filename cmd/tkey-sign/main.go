@@ -116,7 +116,7 @@ func verifySignature(messageFile string, sigFile string, pubkeyFile string) erro
 
 	if err := signature.FromFile(sigFile); err != nil {
 		if errors.Is(errors.Unwrap(err), fs.ErrNotExist) {
-			return fmt.Errorf("Signature file %v not found, specify with '-x sigfile'", sigFile)
+			return fmt.Errorf("signature file %v not found, specify with '-x sigfile'", sigFile)
 		}
 
 		return fmt.Errorf("%w", err)
