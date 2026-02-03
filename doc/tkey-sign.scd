@@ -8,6 +8,8 @@ tkey-sign - Create or verify digital signatures with the Tillitis TKey
 
 *tkey-sign* -h/--help
 
+*tkey-sign* -D/--dump -p/--public pubkey -m message  [-x sigfile]
+
 *tkey-sign* -G/--getkey -p/--public pubkey [-d/--port device] [-f/--force] [-s/--speed speed] [--uss] [--uss-file ussfile] [--verbose]
 
 *tkey-sign* -S/--sign -m message -p/--public pubkey [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
@@ -22,6 +24,11 @@ tkey-sign - Create or verify digital signatures with the Tillitis TKey
 files. The signature is created by the *signer* device app running on
 the Tillitis TKey. The signer is automatically loaded into the TKey
 when signing or extracting the public key.
+
+*-D, --dump*
+
+	Print helpful information about the contents of decoded signature and
+	public key files.
 
 *-G, --getkey*
 

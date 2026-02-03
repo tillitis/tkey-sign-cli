@@ -227,11 +227,43 @@ func loadSigner(devPath string, speed int, fileUSS string, enterUSS bool) (*tkey
 	return &signer, pubkey, nil
 }
 
+func dumpFiles(sigFn string, keyFn string) error {
+	var sig signify.Signature
+	var key signify.PubKey
+
+	if err := sig.FromFile(sigFn); err != nil {
+		return fmt.Errorf("%w", err)
+	}
+
+	fmt.Printf("Signature\n  Alg: ")
+	switch sig.Alg {
+	case signify.Ed:
+		fmt.Printf("Ed\n")
+
+	case signify.B2sEd:
+		fmt.Printf("B2sEd\n")
+
+	default:
+		fmt.Printf(" <unknown>: %v\n", sig.Alg)
+	}
+
+	fmt.Printf("  Sig: %x\n", sig.Sig)
+
+	if err := key.FromFile(keyFn); err != nil {
+		return fmt.Errorf("%w", err)
+	}
+
+	fmt.Printf("Key: %x\n", key)
+
+	return nil
+}
+
 func usage() {
 	desc := fmt.Sprintf(`Usage:
 
 %[1]s -h/--help
 
+%[1]s -D/--dump -p/--public pubkey -m message  [-x sigfile]
 %[1]s -G/--getkey -p/--public pubkey [-d/--port device] [-f/--force] [-s/--speed speed] [--uss] [--uss-file ussfile] [--verbose] 
 
 %[1]s -S/--sign -m message -p/--public pubkey [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
@@ -248,8 +280,10 @@ algorithm is Ed25519.
 Exit status code is 0 if everything went well or non-zero if unsuccessful.
 
 Alternatively, -G/--getkey can be used to receive the public key of
-the signer app on the TKey. Specify where to store it with -p key.pub`,
-		os.Args[0])
+the signer app on the TKey. Specify where to store it with -p key.pub.
+
+Use -D/--dump to get more information about signature and public key
+files.`, os.Args[0])
 
 	le.Printf("%s\n\n%s", desc,
 		pflag.CommandLine.FlagUsagesWrapped(86))
@@ -258,6 +292,7 @@ the signer app on the TKey. Specify where to store it with -p key.pub`,
 func main() {
 	var cmd command
 	var cmdArgs int
+	dump := pflag.BoolP("dump", "D", false, "Dump data about files.")
 	getKey := pflag.BoolP("getkey", "G", false, "Get public key.")
 	sign := pflag.BoolP("sign", "S", false, "Sign the message.")
 	verify := pflag.BoolP("verify", "V", false, "Verify signature of the message.")
@@ -300,6 +335,11 @@ func main() {
 		pflag.Usage()
 		os.Exit(0)
 
+	}
+
+	if *dump {
+		cmd = cmdDump
+		cmdArgs++
 	}
 
 	if *getKey {
@@ -432,6 +472,22 @@ func main() {
 			os.Exit(1)
 		}
 		le.Printf("Signature verified")
+
+	case cmdDump:
+		if *keyFile == "" {
+			le.Printf("Provide public key file path with -p pubkey")
+			os.Exit(1)
+		}
+
+		if *sigFile == "" {
+			*sigFile = *messageFile + ".sig"
+		}
+
+		err := dumpFiles(*sigFile, *keyFile)
+		if err != nil {
+			le.Printf("Error dumping data: %v", err)
+			os.Exit(1)
+		}
 
 	default:
 		pflag.Usage()
