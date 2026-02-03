@@ -5,7 +5,7 @@
 .nh
 .ad l
 .\" Begin generated content:
-.TH "tkey-sign" "1" "2026-03-23"
+.TH "tkey-sign" "1" "2026-04-14"
 .PP
 .SH NAME
 .PP
@@ -14,6 +14,8 @@ tkey-sign - Create or verify digital signatures with the Tillitis TKey
 .SH SYNOPSIS
 .PP
 \fBtkey-sign\fR -h/--help
+.PP
+\fBtkey-sign\fR -D/--dump -p/--public pubkey -m message  [-x sigfile]
 .PP
 \fBtkey-sign\fR -G/--getkey -p/--public pubkey [-d/--port device] [-f/--force] [-s/--speed speed] [--uss] [--uss-file ussfile] [--force-full-uss] [--verbose]
 .PP
@@ -30,6 +32,13 @@ files.\& The signature is created by the \fBsigner\fR device app running on
 the Tillitis TKey.\& The signer is automatically loaded into the TKey
 when signing or extracting the public key.\&
 .PP
+\fB-D, --dump\fR
+.PP
+.RS 4
+Print helpful information about the contents of decoded signature and
+public key files.\&
+.PP
+.RE
 \fB-G, --getkey\fR
 .PP
 .RS 4
