@@ -34,6 +34,17 @@ const (
 	cmdDump
 )
 
+type devArgs struct {
+	Path  string
+	Speed int
+}
+
+type USSArgs struct {
+	FileName  string
+	Request   bool
+	ForceFull bool
+}
+
 // nolint:typecheck // Avoid lint error when the embedding file is missing.
 // Build copies the built signer here
 //
@@ -153,9 +164,17 @@ func verifySignature(messageFile string, sigFile string, pubkeyFile string) erro
 //
 // It then connects to the running signer and returns an interface to
 // the Signer, the public key, and a possible error.
-func loadSigner(devPath string, speed int, fileUSS string, enterUSS bool, forceFullUss bool) (*tkeysign.Signer, []byte, error) {
+func loadSigner(devPath string, speed int, uss USSArgs) (*tkeysign.Signer, []byte, error) {
 	if !verbose {
 		tkeyclient.SilenceLogging()
+	}
+
+	if uss.Request && uss.FileName != "" {
+		return nil, nil, errors.New("pass only one of --uss or --uss-file")
+	}
+
+	if uss.ForceFull && uss.FileName == "" != uss.Request {
+		return nil, nil, errors.New("--force-full-uss unusable unless you also specify --uss or --uss-file")
 	}
 
 	if devPath == "" {
@@ -177,7 +196,7 @@ func loadSigner(devPath string, speed int, fileUSS string, enterUSS bool, forceF
 		options = append(options, tkeyclient.WithSpeed(speed))
 	}
 
-	if forceFullUss {
+	if uss.ForceFull {
 		options = append(options, tkeyclient.WithFullUss())
 	}
 
@@ -189,15 +208,15 @@ func loadSigner(devPath string, speed int, fileUSS string, enterUSS bool, forceF
 		var secret []byte
 		var err error
 
-		if enterUSS {
+		if uss.Request {
 			secret, err = tkeyutil.InputUSS()
 			if err != nil {
 				tk.Close()
 				return nil, nil, fmt.Errorf("InputUSS: %w", err)
 			}
 		}
-		if fileUSS != "" {
-			secret, err = tkeyutil.ReadUSS(fileUSS)
+		if uss.FileName != "" {
+			secret, err = tkeyutil.ReadUSS(uss.FileName)
 			if err != nil {
 				tk.Close()
 				return nil, nil, fmt.Errorf("ReadUSS: %w", err)
@@ -213,7 +232,7 @@ func loadSigner(devPath string, speed int, fileUSS string, enterUSS bool, forceF
 			le.Printf("Signer app loaded.")
 		}
 	} else {
-		if enterUSS || fileUSS != "" {
+		if uss.Request || uss.FileName != "" {
 			le.Printf("WARNING: App already loaded, your USS won't be used.")
 		} else {
 			le.Printf("WARNING: App already loaded.")
@@ -265,6 +284,119 @@ func dumpFiles(sigFn string, keyFn string) error {
 	}
 
 	fmt.Printf("Key: %x\n", key)
+
+	return nil
+}
+
+func GetKey(keyFn string, overwrite bool, dev devArgs, uss USSArgs) error {
+	if keyFn == "" {
+		return errors.New("please provide -p pubkey")
+	}
+
+	signer, pub, err := loadSigner(dev.Path, dev.Speed, uss)
+	if err != nil {
+		return fmt.Errorf("%w", err)
+	}
+
+	defer signer.Close()
+	pubkey, err := signify.NewPubKey(pub)
+	if err != nil {
+		le.Printf("Couldn't convert public key from signer to Signify key\n")
+	}
+
+	comment := "tkey public key"
+	if overwrite {
+		err = pubkey.ToFile(keyFn, comment, true)
+	} else {
+		err = writeRetry(keyFn, &pubkey, comment)
+	}
+
+	if err != nil {
+		signer.Close()
+		return fmt.Errorf("%w", err)
+	}
+
+	return nil
+}
+
+func Sign(msgFn string, keyFn string, sigFn string, overwrite bool, dev devArgs, uss USSArgs) error {
+	var pubKey signify.PubKey
+
+	if sigFn == "" {
+		sigFn = msgFn + ".sig"
+	}
+
+	if msgFn == "" {
+		return errors.New("provide -m messagefile")
+	}
+
+	if keyFn == "" {
+		return errors.New("provide -p pubkey")
+	}
+
+	if err := pubKey.FromFile(keyFn); err != nil {
+		return fmt.Errorf("couldn't read pubkey file: %w", err)
+	}
+
+	signer, pub, err := loadSigner(dev.Path, dev.Speed, uss)
+	if err != nil {
+		return fmt.Errorf("couldn't load signer: %w", err)
+	}
+
+	defer signer.Close()
+
+	if !bytes.Equal(pub, pubKey[:]) {
+		return fmt.Errorf("key from file %v not equal to loaded app's", keyFn)
+	}
+
+	sig, err := signFile(*signer, pub, msgFn)
+	if err != nil {
+		return fmt.Errorf("signing failed: %w", err)
+	}
+
+	comment := fmt.Sprintf("verify with %v", keyFn)
+	if overwrite {
+		err = sig.ToFile(sigFn, comment, true)
+	} else {
+		err = writeRetry(sigFn, sig, comment)
+	}
+
+	if err != nil {
+		return fmt.Errorf("couldn't store signature: %w", err)
+	}
+
+	return nil
+}
+
+func Verify(msgFn string, keyFn string, sigFn string) error {
+	if msgFn == "" {
+		return errors.New("provide message file with -m message")
+	}
+
+	if keyFn == "" {
+		return errors.New("provide public key file path with -p pubkey")
+	}
+
+	if sigFn == "" {
+		sigFn = msgFn + ".sig"
+	}
+
+	if err := verifySignature(msgFn, sigFn, keyFn); err != nil {
+		return fmt.Errorf("verifying failed: %w", err)
+	}
+
+	return nil
+}
+
+func Dump(keyFn string, sigFn string) error {
+	if keyFn == "" {
+		return errors.New("provide public key file path with -p pubkey")
+	}
+
+	err := dumpFiles(sigFn, keyFn)
+	if err != nil {
+		return fmt.Errorf("error dumping data: %w", err)
+	}
 
 	return nil
 }
@@ -386,150 +518,41 @@ func main() {
 		os.Exit(1)
 	}
 
+	dev := devArgs{
+		Path:  *devPath,
+		Speed: *speed,
+	}
+
+	uss := USSArgs{
+		FileName:  *ussFile,
+		Request:   *enterUss,
+		ForceFull: *forceFullUss,
+	}
+
 	switch cmd {
 	case cmdGetKey:
-		if *keyFile == "" {
-			le.Printf("Provide public key file with -p pubkey")
+		if err := GetKey(*keyFile, *force, dev, uss); err != nil {
+			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
-
-		if *enterUss && *ussFile != "" {
-			le.Printf("Pass only one of --uss or --uss-file.\n\n")
-			os.Exit(1)
-		}
-
-		if *forceFullUss && *ussFile == "" != *enterUss {
-			le.Printf("--force-full-uss unusable unless you also specify --uss or --uss-file.\n\n")
-			os.Exit(1)
-		}
-
-		signer, pub, err := loadSigner(*devPath, *speed, *ussFile, *enterUss, *forceFullUss)
-		if err != nil {
-			le.Printf("Couldn't load signer: %v", err)
-			os.Exit(1)
-		}
-
-		pubkey, err := signify.NewPubKey(pub)
-		if err != nil {
-			le.Printf("Couldn't convert public key from signer to Signify key\n")
-			os.Exit(1)
-		}
-
-		comment := "tkey public key"
-		if *force {
-			err = pubkey.ToFile(*keyFile, comment, true)
-		} else {
-			err = writeRetry(*keyFile, &pubkey, comment)
-		}
-
-		if err != nil {
-			le.Printf("%v", err)
-			signer.Close()
-			os.Exit(1)
-		}
-
-		signer.Close()
 
 	case cmdSign:
-		if *messageFile == "" {
-			le.Printf("Provide message file with -m message")
+		if err := Sign(*messageFile, *keyFile, *sigFile, *force, dev, uss); err != nil {
+			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
-
-		if *keyFile == "" {
-			le.Printf("Provide public key file with -p pubkey")
-			os.Exit(1)
-		}
-
-		if *sigFile == "" {
-			*sigFile = *messageFile + ".sig"
-		}
-
-		var pubKey signify.PubKey
-
-		if err := pubKey.FromFile(*keyFile); err != nil {
-			le.Printf("Couldn't read pubkey file: %v", err)
-			os.Exit(1)
-		}
-
-		if *enterUss && *ussFile != "" {
-			le.Printf("Pass only one of --uss or --uss-file.\n\n")
-			os.Exit(1)
-		}
-
-		if *forceFullUss && *ussFile == "" != *enterUss {
-			le.Printf("--force-full-uss unusable unless you also specify --uss or --uss-file.\n\n")
-			os.Exit(1)
-		}
-
-		signer, pub, err := loadSigner(*devPath, *speed, *ussFile, *enterUss, *forceFullUss)
-		if err != nil {
-			le.Printf("Couldn't load signer: %v", err)
-			os.Exit(1)
-		}
-
-		if !bytes.Equal(pub, pubKey[:]) {
-			le.Printf("Public key from file %v not equal to loaded app's", *keyFile)
-			os.Exit(1)
-		}
-
-		sig, err := signFile(*signer, pub, *messageFile)
-		if err != nil {
-			le.Printf("signing failed: %v", err)
-			signer.Close()
-			os.Exit(1)
-		}
-
-		comment := fmt.Sprintf("verify with %v", *keyFile)
-		if *force {
-			err = sig.ToFile(*sigFile, comment, true)
-		} else {
-			err = writeRetry(*sigFile, sig, comment)
-		}
-
-		if err != nil {
-			le.Printf("Couldn't store signature: %v", err)
-			signer.Close()
-			os.Exit(1)
-		}
-
-		signer.Close()
 
 	case cmdVerify:
-		if *messageFile == "" {
-			le.Printf("Provide message file with -m message")
+		if err := Verify(*messageFile, *keyFile, *sigFile); err != nil {
+			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
 
-		if *keyFile == "" {
-			le.Printf("Provide public key file path with -p pubkey")
-			os.Exit(1)
-		}
-
-		if *sigFile == "" {
-			*sigFile = *messageFile + ".sig"
-		}
-
-		err := verifySignature(*messageFile, *sigFile, *keyFile)
-		if err != nil {
-			le.Printf("Error verifying: %v", err)
-			os.Exit(1)
-		}
 		le.Printf("Signature verified")
 
 	case cmdDump:
-		if *keyFile == "" {
-			le.Printf("Provide public key file path with -p pubkey")
-			os.Exit(1)
-		}
-
-		if *sigFile == "" {
-			*sigFile = *messageFile + ".sig"
-		}
-
-		err := dumpFiles(*sigFile, *keyFile)
-		if err != nil {
-			le.Printf("Error dumping data: %v", err)
+		if err := Dump(*keyFile, *sigFile); err != nil {
+			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
 
