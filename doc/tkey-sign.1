@@ -19,9 +19,9 @@ tkey-sign - Create or verify digital signatures with the Tillitis TKey
 .PP
 \fBtkey-sign\fR -G/--getkey -p/--public pubkey [-d/--port device] [-f/--force] [-s/--speed speed] [--uss] [--uss-file ussfile] [--force-full-uss] [--verbose]
 .PP
-\fBtkey-sign\fR -S/--sign -m message -p/--public pubkey [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--force-full-uss] [--verbose] [-x sigfile]
+\fBtkey-sign\fR -S/--sign -m message -p/--public pubkey [-a/--alg algorithm] [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--force-full-uss] [--verbose] [-x sigfile]
 .PP
-\fBtkey-sign\fR -V/--verify -m message -p/--public pubkey [--verbose] [-x sigfile]
+\fBtkey-sign\fR -V/--verify -m message -p/--public [-a/--alg algorithm] pubkey [--verbose] [-x sigfile]
 .PP
 \fBtkey-sign\fR --version
 .PP
@@ -66,6 +66,14 @@ Combine with \fB--uss\fR or \fB--uss-file ussfile\fR to change the key pair.\&
 Verify the signature of message.\& Does not need a connected TKey.\&
 Needs \fB-m message\fR and \fB-p pubkey\fR.\& Default signature file is message.\&sig.\&
 Specify with \fB-x sigfile\fR.\&
+.PP
+.RE
+\fB-a, --alg algorithm\fR
+.PP
+.RS 4
+Specify the hash algorithm to use on the message file before
+signing or verifying.\& Options are "ed" (SHA-512) and "b2s"
+(BLAKE2s).\& Default is "ed"
 .PP
 .RE
 \fB-d, --port device\fR
@@ -161,14 +169,15 @@ with "untrusted comment: ", then encoded in BASE64:
 .PP
 .PD 0
 .IP \(bu 4
-2 byte algorithm identifier, so far only "Ed" for Ed25519.\&
+2 byte algorithm identifier, "Ed" for Ed25519 hashed with SHA-512,
+and "Eb", Ed25519 hashed with BLAKE2s.\&
 .IP \(bu 4
 8 byte key number (unused by tkey-sign).\&
 .IP \(bu 4
 64 byte Ed25519 signature.\&
 .PD
 .PP
-Pubkey files are expected to contain, a one-line comment beginning
+Pubkey files are expected to contain a one-line comment beginning
 with "untrusted comment: ", then encoded in BASE64:
 .PP
 .PD 0
@@ -179,6 +188,19 @@ with "untrusted comment: ", then encoded in BASE64:
 .IP \(bu 4
 32 byte Ed25519 public key.\&
 .PD
+.PP
+NOTE WELL: The original `signify` command does Ed25519 signing on the
+complete file content, not a digest.\& To be compatible we still use the
+"Ed" identifier in our signature files, but you need to do:
+.PP
+.nf
+.RS 4
+sha512 file > digest
+signify -V -m digest -x file\&.sig -p key\&.pub
+.fi
+.RE
+.PP
+to actually verify the right message.\& See the signify-verify script.\&
 .PP
 .SH EXIT STATUS
 .PP
