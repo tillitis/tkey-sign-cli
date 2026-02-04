@@ -34,6 +34,16 @@ const (
 	cmdDump
 )
 
+type devArgs struct {
+	Path  string
+	Speed int
+}
+
+type USSArgs struct {
+	FileName string
+	Request  bool
+}
+
 // nolint:typecheck // Avoid lint error when the embedding file is missing.
 // Build copies the built signer here
 //
@@ -258,6 +268,119 @@ func dumpFiles(sigFn string, keyFn string) error {
 	return nil
 }
 
+func GetKey(keyFn string, overwrite bool, dev devArgs, uss USSArgs) error {
+	if keyFn == "" {
+		return errors.New("please provide -p pubkey")
+	}
+
+	signer, pub, err := loadSigner(dev.Path, dev.Speed, uss.FileName, uss.Request)
+	if err != nil {
+		return fmt.Errorf("%w", err)
+	}
+
+	defer signer.Close()
+	pubkey, err := signify.NewPubKey(pub)
+	if err != nil {
+		le.Printf("Couldn't convert public key from signer to Signify key\n")
+	}
+
+	comment := "tkey public key"
+	if overwrite {
+		err = pubkey.ToFile(keyFn, comment, true)
+	} else {
+		err = writeRetry(keyFn, &pubkey, comment)
+	}
+
+	if err != nil {
+		signer.Close()
+		return fmt.Errorf("%w", err)
+	}
+
+	return nil
+}
+
+func Sign(msgFn string, keyFn string, sigFn string, overwrite bool, dev devArgs, uss USSArgs) error {
+	var pubKey signify.PubKey
+
+	if sigFn == "" {
+		sigFn = msgFn + ".sig"
+	}
+
+	if msgFn == "" {
+		return errors.New("provide -m messagefile")
+	}
+
+	if keyFn == "" {
+		return errors.New("provide -p pubkey")
+	}
+
+	if err := pubKey.FromFile(keyFn); err != nil {
+		return fmt.Errorf("couldn't read pubkey file: %w", err)
+	}
+
+	signer, pub, err := loadSigner(dev.Path, dev.Speed, uss.FileName, uss.Request)
+	if err != nil {
+		return fmt.Errorf("couldn't load signer: %w", err)
+	}
+
+	defer signer.Close()
+
+	if !bytes.Equal(pub, pubKey[:]) {
+		return fmt.Errorf("key from file %v not equal to loaded app's", keyFn)
+	}
+
+	sig, err := signFile(*signer, pub, msgFn)
+	if err != nil {
+		return fmt.Errorf("signing failed: %w", err)
+	}
+
+	comment := fmt.Sprintf("verify with %v", keyFn)
+	if overwrite {
+		err = sig.ToFile(sigFn, comment, true)
+	} else {
+		err = writeRetry(sigFn, sig, comment)
+	}
+
+	if err != nil {
+		return fmt.Errorf("couldn't store signature: %w", err)
+	}
+
+	return nil
+}
+
+func Verify(msgFn string, keyFn string, sigFn string) error {
+	if msgFn == "" {
+		return errors.New("provide message file with -m message")
+	}
+
+	if keyFn == "" {
+		return errors.New("provide public key file path with -p pubkey")
+	}
+
+	if sigFn == "" {
+		sigFn = msgFn + ".sig"
+	}
+
+	if err := verifySignature(msgFn, sigFn, keyFn); err != nil {
+		return fmt.Errorf("verifying failed: %w", err)
+	}
+
+	return nil
+}
+
+func Dump(keyFn string, sigFn string) error {
+	if keyFn == "" {
+		return errors.New("provide public key file path with -p pubkey")
+	}
+
+	err := dumpFiles(sigFn, keyFn)
+	if err != nil {
+		return fmt.Errorf("error dumping data: %w", err)
+	}
+
+	return nil
+}
+
 func usage() {
 	desc := fmt.Sprintf(`Usage:
 
@@ -362,130 +485,40 @@ func main() {
 		os.Exit(1)
 	}
 
+	dev := devArgs{
+		Path:  *devPath,
+		Speed: *speed,
+	}
+
+	uss := USSArgs{
+		FileName: *ussFile,
+		Request:  *enterUss,
+	}
+
 	switch cmd {
 	case cmdGetKey:
-		if *keyFile == "" {
-			le.Printf("Provide public key file with -p pubkey")
+		if err := GetKey(*keyFile, *force, dev, uss); err != nil {
+			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
-
-		signer, pub, err := loadSigner(*devPath, *speed, *ussFile, *enterUss)
-		if err != nil {
-			le.Printf("Couldn't load signer: %v", err)
-			os.Exit(1)
-		}
-
-		pubkey, err := signify.NewPubKey(pub)
-		if err != nil {
-			le.Printf("Couldn't convert public key from signer to Signify key\n")
-			os.Exit(1)
-		}
-
-		comment := "tkey public key"
-		if *force {
-			err = pubkey.ToFile(*keyFile, comment, true)
-		} else {
-			err = writeRetry(*keyFile, &pubkey, comment)
-		}
-
-		if err != nil {
-			le.Printf("%v", err)
-			signer.Close()
-			os.Exit(1)
-		}
-
-		signer.Close()
 
 	case cmdSign:
-		if *messageFile == "" {
-			le.Printf("Provide message file with -m message")
+		if err := Sign(*messageFile, *keyFile, *sigFile, *force, dev, uss); err != nil {
+			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
-
-		if *keyFile == "" {
-			le.Printf("Provide public key file with -p pubkey")
-			os.Exit(1)
-		}
-
-		if *sigFile == "" {
-			*sigFile = *messageFile + ".sig"
-		}
-
-		var pubKey signify.PubKey
-
-		if err := pubKey.FromFile(*keyFile); err != nil {
-			le.Printf("Couldn't read pubkey file: %v", err)
-			os.Exit(1)
-		}
-
-		signer, pub, err := loadSigner(*devPath, *speed, *ussFile, *enterUss)
-		if err != nil {
-			le.Printf("Couldn't load signer: %v", err)
-			os.Exit(1)
-		}
-
-		if !bytes.Equal(pub, pubKey[:]) {
-			le.Printf("Public key from file %v not equal to loaded app's", *keyFile)
-			os.Exit(1)
-		}
-
-		sig, err := signFile(*signer, pub, *messageFile)
-		if err != nil {
-			le.Printf("signing failed: %v", err)
-			signer.Close()
-			os.Exit(1)
-		}
-
-		comment := fmt.Sprintf("verify with %v", *keyFile)
-		if *force {
-			err = sig.ToFile(*sigFile, comment, true)
-		} else {
-			err = writeRetry(*sigFile, sig, comment)
-		}
-
-		if err != nil {
-			le.Printf("Couldn't store signature: %v", err)
-			signer.Close()
-			os.Exit(1)
-		}
-
-		signer.Close()
 
 	case cmdVerify:
-		if *messageFile == "" {
-			le.Printf("Provide message file with -m message")
+		if err := Verify(*messageFile, *keyFile, *sigFile); err != nil {
+			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
 
-		if *keyFile == "" {
-			le.Printf("Provide public key file path with -p pubkey")
-			os.Exit(1)
-		}
-
-		if *sigFile == "" {
-			*sigFile = *messageFile + ".sig"
-		}
-
-		err := verifySignature(*messageFile, *sigFile, *keyFile)
-		if err != nil {
-			le.Printf("Error verifying: %v", err)
-			os.Exit(1)
-		}
 		le.Printf("Signature verified")
 
 	case cmdDump:
-		if *keyFile == "" {
-			le.Printf("Provide public key file path with -p pubkey")
-			os.Exit(1)
-		}
-
-		if *sigFile == "" {
-			*sigFile = *messageFile + ".sig"
-		}
-
-		err := dumpFiles(*sigFile, *keyFile)
-		if err != nil {
-			le.Printf("Error dumping data: %v", err)
+		if err := Dump(*keyFile, *sigFile); err != nil {
+			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
 
