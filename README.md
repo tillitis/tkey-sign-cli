@@ -14,6 +14,10 @@ See [Release notes](RELEASE.md).
 
 ## Usage
 
+You can specify the algorithm to use on the file before signing and
+verifying by specifying `-a/--alg algorithm`. The choices are "ed"
+(default, uses SHA-512) and "b2s" (BLAKE2s).
+
 Get a public key, possibly modifying the key pair by using a User
 Supplied Secret, and storing the public key in file `-p pubkey`.
 
@@ -29,7 +33,7 @@ to supply the public key file as well which `tkey-sign` will
 automatically verify that it's the expected public key.
 
 ```
-tkey-sign -S/--sign [-d/--port device] [-s speed] -m message
+tkey-sign -S/--sign [-d/--port device] [-s speed] -m message [-a/--alg algorithm]
 [--uss] [--uss-file secret-file] -p/--public pubkey [-x sig-file]
 ```
 
@@ -38,7 +42,7 @@ Signature is by default in `message.sig` but can be specified
 with `-x sigfile`. Doesn't need a connected TKey.
 
 ```
-tkey-sign -V/--verify -m message -p/--public pubkey [-x sigfile]
+tkey-sign -V/--verify -m message -p/--public pubkey [-x sigfile] [-a/--alg algorithm]
 ```
 
 Alternatively you can use OpenBSD's *signify(1)* to verify the
@@ -60,6 +64,7 @@ All examples either load the device app automatically or works with an
 already loaded device app.
 
 Store the public key in a file.
+
 ```
 $ tkey-sign -G -p key.pub
 ```
