@@ -6,8 +6,10 @@
 
 - Follow REUSE specification.
 
-- Export Signify types and methods to import and export them to
-  buffers and files.
+- Introduce package signify. Export Signify types to import and export
+  them to buffers and files.
+
+- Add support for BLAKE2s hashing.
 
 ## v1.0.1
 

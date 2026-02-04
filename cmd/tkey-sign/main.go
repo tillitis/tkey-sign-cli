@@ -22,6 +22,7 @@ import (
 	"github.com/tillitis/tkeyclient"
 	"github.com/tillitis/tkeysign"
 	"github.com/tillitis/tkeyutil"
+	"golang.org/x/crypto/blake2s"
 )
 
 type command int
@@ -343,7 +344,7 @@ func Dump(keyFn string, sigFn string) error {
 }
 
 // getMessage returns the message to sign or verify.
-func getMessage(msgFn string) (string, error) {
+func getMessage(msgFn string, alg string) (string, error) {
 	if msgFn == "" {
 		return "", errors.New("provide -m messagefile")
 	}
@@ -353,14 +354,37 @@ func getMessage(msgFn string) (string, error) {
 		return "", fmt.Errorf("%w", err)
 	}
 
-	fileDigest := sha512.Sum512(file)
-	fileDigestHex := fmt.Sprintf("%x  %s\n", fileDigest, msgFn)
-	if verbose {
-		le.Printf("SHA512 hash: %x", fileDigest)
-		le.Printf("SHA512 hash: %v", fileDigest)
+	var message string
+
+	switch alg {
+	case "ed":
+		// default
+
+		fileDigest := sha512.Sum512(file)
+		// The actual message is compatible with output from
+		// sha512sum, including the filename, to work with
+		// scripts using signify.
+		//
+		// XXX Do we really want to include the filename
+		// here? Keeping it for backwards compatibility now.
+		message = fmt.Sprintf("%x  %s\n", fileDigest, msgFn)
+		if verbose {
+			le.Printf("SHA512 digest: %x", fileDigest)
+		}
+
+	case "b2s":
+		digest := blake2s.Sum256(file)
+		message = string(digest[:])
+
+	default:
+		return "", errors.New("unknown algorithm")
 	}
 
-	return fileDigestHex, nil
+	if verbose {
+		le.Printf("message to be signed: %v", message)
+	}
+
+	return message, nil
 }
 
 func usage() {
@@ -371,9 +395,9 @@ func usage() {
 %[1]s -D/--dump -p/--public pubkey -m message  [-x sigfile]
 %[1]s -G/--getkey -p/--public pubkey [-d/--port device] [-f/--force] [-s/--speed speed] [--uss] [--uss-file ussfile] [--verbose] 
 
-%[1]s -S/--sign -m message -p/--public pubkey [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
+%[1]s -S/--sign -m message -p/--public pubkey [-a/--alg algorithm] [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
 
-%[1]s -V/--verify -m message -p/--public pubkey [-x sigfile]
+%[1]s -V/--verify -m message -p/--public pubkey [-a/--alg algorithm] [-x sigfile]
 
 %[1]s --version
 
@@ -397,6 +421,7 @@ files.`, os.Args[0])
 func main() {
 	var cmd command
 	var cmdArgs int
+	alg := pflag.StringP("alg", "a", "ed", "Hash message file before ops (ed: SHA-512 output, b2s: BLAKE2s")
 	dump := pflag.BoolP("dump", "D", false, "Dump data about files.")
 	getKey := pflag.BoolP("getkey", "G", false, "Get public key.")
 	sign := pflag.BoolP("sign", "S", false, "Sign the message.")
@@ -482,7 +507,7 @@ func main() {
 	if cmd == cmdSign || cmd == cmdVerify {
 		var err error
 
-		msg, err = getMessage(*messageFile)
+		msg, err = getMessage(*messageFile, *alg)
 		if err != nil {
 			fmt.Printf("%v\n", err)
 			os.Exit(1)
