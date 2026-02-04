@@ -76,29 +76,17 @@ func GetEmbeddedAppDigest() string {
 	return hex.EncodeToString(digest[:])
 }
 
-// signFile uses the connection to the signer and produces an Ed25519
+// signMessage uses the connection to the signer and produces an Ed25519
 // signature over the file in fileName. It automatically verifies the
 // signature against the provided pubkey.
 //
 // It returns the Ed25519 signature on success or an error.
-func signFile(signer tkeysign.Signer, pubkey []byte, fileName string) (*signify.Signature, error) {
-	message, err := os.ReadFile(fileName)
-	if err != nil {
-		return nil, fmt.Errorf("ReadFile: %w", err)
-	}
-
-	fileDigest := sha512.Sum512(message)
-	fileDigestHex := fmt.Sprintf("%x  %s\n", fileDigest, fileName)
-	if verbose {
-		le.Printf("SHA512 hash: %x", fileDigest)
-		le.Printf("SHA512 hash: %v", fileDigest)
-	}
-
+func signMessage(signer tkeysign.Signer, pubkey []byte, message string) (*signify.Signature, error) {
 	if signerAppNoTouch != "" {
 		le.Printf("WARNING! This tkey-sign and signer app is built with the touch requirement removed")
 	}
 
-	sig, err := signer.Sign([]byte(fileDigestHex))
+	sig, err := signer.Sign([]byte(message))
 	if err != nil {
 		return nil, fmt.Errorf("signing failed: %w", err)
 	}
@@ -112,7 +100,7 @@ func signFile(signer tkeysign.Signer, pubkey []byte, fileName string) (*signify.
 		le.Printf("signature: %x", sig)
 	}
 
-	if !ed25519.Verify(pubkey, []byte(fileDigestHex), sig) {
+	if !ed25519.Verify(pubkey, []byte(message), sig) {
 		return nil, fmt.Errorf("signature FAILED verification")
 	}
 
@@ -121,7 +109,7 @@ func signFile(signer tkeysign.Signer, pubkey []byte, fileName string) (*signify.
 
 // verifySignature verifies a Ed25519 signature stored in sigFile over
 // messageFile with public key in pubkeyFile
-func verifySignature(messageFile string, sigFile string, pubkeyFile string) error {
+func verifySignature(message string, sigFile string, pubkeyFile string) error {
 	var signature signify.Signature
 
 	if err := signature.FromFile(sigFile); err != nil {
@@ -138,18 +126,7 @@ func verifySignature(messageFile string, sigFile string, pubkeyFile string) erro
 		return fmt.Errorf("%w", err)
 	}
 
-	message, err := os.ReadFile(messageFile)
-	if err != nil {
-		return fmt.Errorf("could not read %s: %w", messageFile, err)
-	}
-
-	digest := sha512.Sum512(message)
-	digestHex := fmt.Sprintf("%x  %s\n", digest, messageFile)
-	if verbose {
-		le.Printf("SHA512 hash: %x", digest)
-	}
-
-	if !ed25519.Verify(pubKey[:], []byte(digestHex), signature.Sig[:]) {
+	if !ed25519.Verify(pubKey[:], []byte(message), signature.Sig[:]) {
 		return fmt.Errorf("signature not valid")
 	}
 
@@ -299,16 +276,8 @@ func GetKey(keyFn string, overwrite bool, dev devArgs, uss USSArgs) error {
 	return nil
 }
 
-func Sign(msgFn string, keyFn string, sigFn string, overwrite bool, dev devArgs, uss USSArgs) error {
+func Sign(msg string, keyFn string, sigFn string, overwrite bool, dev devArgs, uss USSArgs) error {
 	var pubKey signify.PubKey
-
-	if sigFn == "" {
-		sigFn = msgFn + ".sig"
-	}
-
-	if msgFn == "" {
-		return errors.New("provide -m messagefile")
-	}
 
 	if keyFn == "" {
 		return errors.New("provide -p pubkey")
@@ -329,7 +298,7 @@ func Sign(msgFn string, keyFn string, sigFn string, overwrite bool, dev devArgs,
 		return fmt.Errorf("key from file %v not equal to loaded app's", keyFn)
 	}
 
-	sig, err := signFile(*signer, pub, msgFn)
+	sig, err := signMessage(*signer, pub, msg)
 	if err != nil {
 		return fmt.Errorf("signing failed: %w", err)
 	}
@@ -348,20 +317,12 @@ func Sign(msgFn string, keyFn string, sigFn string, overwrite bool, dev devArgs,
 	return nil
 }
 
-func Verify(msgFn string, keyFn string, sigFn string) error {
-	if msgFn == "" {
-		return errors.New("provide message file with -m message")
-	}
-
+func Verify(msg string, keyFn string, sigFn string) error {
 	if keyFn == "" {
 		return errors.New("provide public key file path with -p pubkey")
 	}
 
-	if sigFn == "" {
-		sigFn = msgFn + ".sig"
-	}
-
-	if err := verifySignature(msgFn, sigFn, keyFn); err != nil {
+	if err := verifySignature(msg, sigFn, keyFn); err != nil {
 		return fmt.Errorf("verifying failed: %w", err)
 	}
 
@@ -379,6 +340,27 @@ func Dump(keyFn string, sigFn string) error {
 	}
 
 	return nil
+}
+
+// getMessage returns the message to sign or verify.
+func getMessage(msgFn string) (string, error) {
+	if msgFn == "" {
+		return "", errors.New("provide -m messagefile")
+	}
+
+	file, err := os.ReadFile(msgFn)
+	if err != nil {
+		return "", fmt.Errorf("%w", err)
+	}
+
+	fileDigest := sha512.Sum512(file)
+	fileDigestHex := fmt.Sprintf("%x  %s\n", fileDigest, msgFn)
+	if verbose {
+		le.Printf("SHA512 hash: %x", fileDigest)
+		le.Printf("SHA512 hash: %v", fileDigest)
+	}
+
+	return fileDigestHex, nil
 }
 
 func usage() {
@@ -495,6 +477,22 @@ func main() {
 		Request:  *enterUss,
 	}
 
+	var msg string
+
+	if cmd == cmdSign || cmd == cmdVerify {
+		var err error
+
+		msg, err = getMessage(*messageFile)
+		if err != nil {
+			fmt.Printf("%v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	if *sigFile == "" {
+		*sigFile = *messageFile + ".sig"
+	}
+
 	switch cmd {
 	case cmdGetKey:
 		if err := GetKey(*keyFile, *force, dev, uss); err != nil {
@@ -503,13 +501,13 @@ func main() {
 		}
 
 	case cmdSign:
-		if err := Sign(*messageFile, *keyFile, *sigFile, *force, dev, uss); err != nil {
+		if err := Sign(msg, *keyFile, *sigFile, *force, dev, uss); err != nil {
 			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
 
 	case cmdVerify:
-		if err := Verify(*messageFile, *keyFile, *sigFile); err != nil {
+		if err := Verify(msg, *keyFile, *sigFile); err != nil {
 			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
