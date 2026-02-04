@@ -8,11 +8,13 @@ tkey-sign - Create or verify digital signatures with the Tillitis TKey
 
 *tkey-sign* -h/--help
 
+*tkey-sign* -D/--dump -p/--public pubkey -m message  [-x sigfile]
+
 *tkey-sign* -G/--getkey -p/--public pubkey [-d/--port device] [-f/--force] [-s/--speed speed] [--uss] [--uss-file ussfile] [--verbose]
 
-*tkey-sign* -S/--sign -m message -p/--public pubkey [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
+*tkey-sign* -S/--sign -m message -p/--public pubkey [-a/--alg algorithm] [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
 
-*tkey-sign* -V/--verify -m message -p/--public pubkey [--verbose] [-x sigfile]
+*tkey-sign* -V/--verify -m message -p/--public [-a/--alg algorithm] pubkey [--verbose] [-x sigfile]
 
 *tkey-sign* --version
 
@@ -22,6 +24,11 @@ tkey-sign - Create or verify digital signatures with the Tillitis TKey
 files. The signature is created by the *signer* device app running on
 the Tillitis TKey. The signer is automatically loaded into the TKey
 when signing or extracting the public key.
+
+*-D, --dump*
+
+	Print helpful information about the contents of decoded signature and
+	public key files.
 
 *-G, --getkey*
 
@@ -45,6 +52,12 @@ when signing or extracting the public key.
 	Verify the signature of message. Does not need a connected TKey.
 	Needs *-m message* and *-p pubkey*. Default signature file is message.sig.
 	Specify with *-x sigfile*.
+
+*-a, --alg algorithm*
+
+	Specify the hash algorithm to use on the message file before
+	signing or verifying. Options are "ed" (SHA-512) and "b2s"
+	(BLAKE2s). Default is "ed"
 
 *-d, --port device*
 
@@ -106,16 +119,28 @@ when signing or extracting the public key.
 Signature files are expected to contain a one-line comment beginning
 with "untrusted comment: ", then encoded in BASE64:
 
-- 2 byte algorithm identifier, so far only "Ed" for Ed25519.
+- 2 byte algorithm identifier, "Ed" for Ed25519 hashed with SHA-512,
+  and "Eb", Ed25519 hashed with BLAKE2s.
 - 8 byte key number (unused by tkey-sign).
 - 64 byte Ed25519 signature.
 
-Pubkey files are expected to contain, a one-line comment beginning
+Pubkey files are expected to contain a one-line comment beginning
 with "untrusted comment: ", then encoded in BASE64:
 
 - 2 byte algorithm identifier, so far only "Ed" for Ed25519.
 - 8 byte key number (unused by tkey-sign).
 - 32 byte Ed25519 public key.
+
+NOTE WELL: The original `signify` command does Ed25519 signing on the
+complete file content, not a digest. To be compatible we still use the
+"Ed" identifier in our signature files, but you need to do:
+
+```
+sha512 file > digest
+signify -V -m digest -x file.sig -p key.pub
+```
+
+to actually verify the right message. See the signify-verify script.
 
 # EXIT STATUS
 
