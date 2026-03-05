@@ -8,9 +8,9 @@ tkey-sign - Create or verify digital signatures with the Tillitis TKey
 
 *tkey-sign* -h/--help
 
-*tkey-sign* -G/--getkey -p/--public pubkey [-d/--port device] [-f/--force] [-s/--speed speed] [--uss] [--uss-file ussfile] [--verbose]
+*tkey-sign* -G/--getkey -p/--public pubkey [-d/--port device] [-f/--force] [-s/--speed speed] [--uss] [--uss-file ussfile] [--force-full-uss] [--verbose]
 
-*tkey-sign* -S/--sign -m message -p/--public pubkey [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
+*tkey-sign* -S/--sign -m message -p/--public pubkey [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--force-full-uss] [--verbose] [-x sigfile]
 
 *tkey-sign* -V/--verify -m message -p/--public pubkey [--verbose] [-x sigfile]
 
@@ -54,6 +54,12 @@ when signing or extracting the public key.
 *-f, --force*
 
 	Force writing signature and pubkey file, overwriting existing files.
+
+*--force-full-uss*
+
+	Force the use of a full 32 byte USS digest on Bellatrix versions
+	and earlier. Otherwise the last byte is always 0. Default on
+	Castor and cannot be turned off.
 
 *-h, --help*
 

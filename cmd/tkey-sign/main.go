@@ -172,7 +172,7 @@ func verifySignature(messageFile string, sigFile string, pubkeyFile string) erro
 //
 // It then connects to the running signer and returns an interface to
 // the Signer, the public key, and a possible error.
-func loadSigner(devPath string, speed int, fileUSS string, enterUSS bool) (*tkeysign.Signer, []byte, error) {
+func loadSigner(devPath string, speed int, fileUSS string, enterUSS bool, forceFullUss bool) (*tkeysign.Signer, []byte, error) {
 	if !verbose {
 		tkeyclient.SilenceLogging()
 	}
@@ -189,7 +189,18 @@ func loadSigner(devPath string, speed int, fileUSS string, enterUSS bool) (*tkey
 	if verbose {
 		le.Printf("Connecting to TKey on serial port %s ...", devPath)
 	}
-	if err := tk.Connect(devPath, tkeyclient.WithSpeed(speed)); err != nil {
+
+	options := []func(*tkeyclient.TillitisKey){}
+
+	if speed != 0 {
+		options = append(options, tkeyclient.WithSpeed(speed))
+	}
+
+	if forceFullUss {
+		options = append(options, tkeyclient.WithFullUss())
+	}
+
+	if err := tk.Connect(devPath, options...); err != nil {
 		return nil, nil, fmt.Errorf("could not open %s: %w", devPath, err)
 	}
 
@@ -286,12 +297,12 @@ func main() {
 	messageFile := pflag.StringP("message", "m", "", "Specify file containing `message`.")
 	devPath := pflag.StringP("port", "d", "",
 		"Set serial port `device`. If this is not used, auto-detection will be attempted.")
-	speed := pflag.IntP("speed", "s", tkeyclient.SerialSpeed,
-		"Set serial port `speed` in bits per second.")
+	speed := pflag.IntP("speed", "s", 0, "Set serial port `speed` in bits per second.")
 	enterUss := pflag.Bool("uss", false,
 		"Enable typing of a phrase to be hashed as the User Supplied Secret. The USS is loaded onto the TKey along with the app itself. A different USS results in different public/private keys.")
 	ussFile := pflag.String("uss-file", "",
 		"Read `ussfile` and hash its contents as the USS. Use '-' (dash) to read from stdin. The full contents are hashed unmodified (e.g. newlines are not stripped).")
+	forceFullUss := pflag.Bool("force-full-uss", false, "")
 	versionOnly := pflag.BoolP("version", "v", false, "Output version information.")
 	helpOnly := pflag.BoolP("help", "h", false, "Output this help.")
 
@@ -348,7 +359,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		signer, pub, err := loadSigner(*devPath, *speed, *ussFile, *enterUss)
+		signer, pub, err := loadSigner(*devPath, *speed, *ussFile, *enterUss, *forceFullUss)
 		if err != nil {
 			le.Printf("Couldn't load signer: %v", err)
 			os.Exit(1)
@@ -398,7 +409,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		signer, pub, err := loadSigner(*devPath, *speed, *ussFile, *enterUss)
+		signer, pub, err := loadSigner(*devPath, *speed, *ussFile, *enterUss, *forceFullUss)
 		if err != nil {
 			le.Printf("Couldn't load signer: %v", err)
 			os.Exit(1)
