@@ -302,7 +302,7 @@ func main() {
 		"Enable typing of a phrase to be hashed as the User Supplied Secret. The USS is loaded onto the TKey along with the app itself. A different USS results in different public/private keys.")
 	ussFile := pflag.String("uss-file", "",
 		"Read `ussfile` and hash its contents as the USS. Use '-' (dash) to read from stdin. The full contents are hashed unmodified (e.g. newlines are not stripped).")
-	forceFullUss := pflag.Bool("force-full-uss", false, "")
+	forceFullUss := pflag.Bool("force-full-uss", false, "Force use of 32 byte USS digest.")
 	versionOnly := pflag.BoolP("version", "v", false, "Output version information.")
 	helpOnly := pflag.BoolP("help", "h", false, "Output this help.")
 
