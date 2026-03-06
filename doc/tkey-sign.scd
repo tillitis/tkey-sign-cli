@@ -57,9 +57,8 @@ when signing or extracting the public key.
 
 *--force-full-uss*
 
-	Force the use of a full 32 byte USS digest on Bellatrix versions
-	and earlier. Otherwise the last byte is always 0. Default on
-	Castor and cannot be turned off.
+	Force sending a 32 byte USS digest. For backwards compatibility
+	the default is sending 31 bytes of the computed digest and a zero.
 
 *-h, --help*
 
