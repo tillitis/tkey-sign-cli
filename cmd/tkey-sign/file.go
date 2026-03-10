@@ -24,7 +24,7 @@ func readBase64(filename string) ([]byte, error) {
 
 	lines := strings.Split(string(input), "\n")
 	if len(lines) < 2 {
-		return nil, fmt.Errorf("Too few lines in file %s", filename)
+		return nil, fmt.Errorf("too few lines in file %s", filename)
 	}
 
 	data, err := base64.StdEncoding.DecodeString(lines[1])
