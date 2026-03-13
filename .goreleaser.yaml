@@ -78,7 +78,7 @@ builds:
       -w -X main.version={{ .Version }} -X main.signerAppNoTouch= -buildid=
 
 universal_binaries:
-  -
+  - id: tkey-sign-cli
     ids:
       - darwin
     replace: true
