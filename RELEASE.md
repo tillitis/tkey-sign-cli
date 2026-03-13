@@ -1,5 +1,36 @@
 # Release notes
 
+## v1.1.0
+
+- Update tkeyclient version because of a vulnerability leaving some
+  USSs unused. Keys might have changed since earlier versions! Read
+  more here:
+
+  https://github.com/tillitis/tkeyclient/security/advisories/GHSA-4w7r-3222-8h6v
+
+  The error is only triggered if you use `tkey-sign-cli` with the
+  `--uss` or `--uss-file` flags and use an affected USS. An affected
+  USS hashes to a digest with a 0 (zero) in the first byte.
+
+  Follow these steps to identify if you are affected:
+    1. Run `tkey-sign -G -p key.pub --uss`
+    2. Type in your USS.
+    3. Remove and reinsert the TKey.
+    4. Run `tkey-sign -G -p key2.pub`
+    5. Compare the `key.pub` and `key2.pub` files. If they have the same
+       contents your USS is vulnerable.
+
+  If your USS are affected, you have three options:
+    1. Not using a USS and keep your signing keys.
+    2. Keep using the USS and get new signing keys.
+    3. Use another USS and get new signing keys.
+
+- Add a new option flag: `--force-full-uss` to force full use of the
+  32 byte USS digest.
+
+Full
+[changelog](https://github.com/tillitis/tkey-sign-cli/compare/v1.0.1...v1.1.0).
+
 ## v1.0.1
 
 - Normalize line endings of user input when asked to overwrite a file.
