@@ -60,6 +60,8 @@ when signing or extracting the public key.
 	Force sending a 32 byte USS digest. For backwards compatibility
 	the default is sending 31 bytes of the computed digest and a zero.
 
+	Only usable with *--uss* or *--uss-file*.
+
 *-h, --help*
 
 	Output short help text.

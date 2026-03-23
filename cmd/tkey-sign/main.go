@@ -372,6 +372,16 @@ func main() {
 			os.Exit(1)
 		}
 
+		if *enterUss && *ussFile != "" {
+			le.Printf("Pass only one of --uss or --uss-file.\n\n")
+			os.Exit(1)
+		}
+
+		if *forceFullUss && *ussFile == "" != *enterUss {
+			le.Printf("--force-full-uss unusable unless you also specify --uss or --uss-file.\n\n")
+			os.Exit(1)
+		}
+
 		signer, pub, err := loadSigner(*devPath, *speed, *ussFile, *enterUss, *forceFullUss)
 		if err != nil {
 			le.Printf("Couldn't load signer: %v", err)
@@ -419,6 +429,16 @@ func main() {
 		pubkey, err := readKey(*keyFile)
 		if err != nil {
 			le.Printf("Couldn't read pubkey file: %v", err)
+			os.Exit(1)
+		}
+
+		if *enterUss && *ussFile != "" {
+			le.Printf("Pass only one of --uss or --uss-file.\n\n")
+			os.Exit(1)
+		}
+
+		if *forceFullUss && *ussFile == "" != *enterUss {
+			le.Printf("--force-full-uss unusable unless you also specify --uss or --uss-file.\n\n")
 			os.Exit(1)
 		}
 
