@@ -14,14 +14,12 @@ linters:
     - fatcontext
     - gocheckcompilerdirectives
     - gochecksumtype
-    - gocyclo
     - godox
     - gomoddirectives
     - gomodguard
     - gosec
     - gosmopolitan
     - loggercheck
-    - maintidx
     - makezero
     - misspell
     - musttag
@@ -52,9 +50,11 @@ linters:
     - exhaustruct
     - funlen
     - gocognit
+    - gocyclo
     - godot
     - nestif
     - perfsprint
+    - maintidx
     - noctx
     # enable later
     - gocritic
