@@ -46,6 +46,12 @@ type USSArgs struct {
 	ForceFull bool
 }
 
+// Digest holds the Alg type digest of a message to be signed.
+type Digest struct {
+	Digest string
+	Alg    signify.AlgType
+}
+
 // nolint:typecheck // Avoid lint error when the embedding file is missing.
 // Build copies the built signer here
 //
