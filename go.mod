@@ -1,25 +1,30 @@
 module github.com/tillitis/tkey-sign-cli
 
-go 1.23.1
+go 1.26.4
 
 require (
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/pflag v1.0.10
 	github.com/tillitis/tkeyclient v1.3.1
-	github.com/tillitis/tkeysign v1.0.1
+	github.com/tillitis/tkeysign v1.1.0
 	github.com/tillitis/tkeyutil v0.0.9
 )
 
 require (
-	github.com/ccoveille/go-safecast/v2 v2.0.0 // indirect
-	github.com/creack/goselect v0.1.2 // indirect
-	github.com/gen2brain/beeep v0.0.0-20240516210008-9c006672e7f4 // indirect
+	git.sr.ht/~jackmordaunt/go-toast v1.1.2 // indirect
+	github.com/ccoveille/go-safecast/v2 v2.0.1 // indirect
+	github.com/esiqveland/notify v0.14.0 // indirect
+	github.com/gen2brain/beeep v0.11.2 // indirect
+	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4 // indirect
-	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/godbus/dbus/v5 v5.2.2 // indirect
+	github.com/jackmordaunt/icns/v3 v3.0.1 // indirect
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
-	github.com/stretchr/testify v1.8.4 // indirect
+	github.com/sergeymakinen/go-bmp v1.0.0 // indirect
+	github.com/sergeymakinen/go-ico v1.0.0 // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
-	go.bug.st/serial v1.6.2 // indirect
-	golang.org/x/crypto v0.40.0 // indirect
-	golang.org/x/sys v0.34.0 // indirect
-	golang.org/x/term v0.33.0 // indirect
+	go.bug.st/serial v1.7.1 // indirect
+	golang.org/x/crypto v0.53.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/term v0.44.0 // indirect
 )
