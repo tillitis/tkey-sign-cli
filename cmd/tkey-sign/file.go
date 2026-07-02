@@ -99,7 +99,7 @@ func writeBase64(filename string, data any, comment string, overwrite bool) erro
 
 	defer f.Close()
 
-	_, err = f.Write([]byte(fmt.Sprintf("untrusted comment: %s\n", comment)))
+	_, err = f.Write(fmt.Appendf(nil, "untrusted comment: %s\n", comment))
 	if err != nil {
 		return fmt.Errorf("%w", err)
 	}
