@@ -140,6 +140,10 @@ func (p *PubKey) ToFile(fileName string, comment string, overwrite bool) error {
 	return writeFile(fileName, buf, overwrite)
 }
 
+func (p *PubKey) ToFileRaw(fileName string, overwrite bool) error {
+	return writeFile(fileName, p[:], overwrite)
+}
+
 // NewSignature instantiates a signify Signature from a byte slice.
 func NewSignature(t AlgType, srcSig []byte) (Signature, error) {
 	var sig Signature
