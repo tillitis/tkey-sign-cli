@@ -112,7 +112,7 @@ func (p *PubKey) FromBuffer(b []byte) error {
 		return fmt.Errorf("%w", err)
 	}
 
-	if pubKey.Alg != [2]byte{'E', 'd'} || pubKey.KeyNum != [8]byte{1, 7} {
+	if pubKey.Alg != [2]byte{'E', 'd'} {
 		return fmt.Errorf("incompatible key")
 	}
 
@@ -189,10 +189,6 @@ func (s *Signature) FromBuffer(b []byte) error {
 
 	default:
 		return fmt.Errorf("unknown signature algorithm")
-	}
-
-	if sig.KeyNum != [8]byte{1, 7} {
-		return fmt.Errorf("incompatible signature")
 	}
 
 	copy(s.Sig[:], sig.Sig[:])
