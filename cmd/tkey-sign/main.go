@@ -89,7 +89,7 @@ func GetEmbeddedAppDigest() string {
 // signature against the provided pubkey.
 //
 // It returns the Ed25519 signature on success or an error.
-func signMessage(signer tkeysign.Signer, pubkey []byte, digest Digest) (*signify.Signature, error) {
+func signMessage(signer tkeysign.Signer, pubkey signify.PubKey, digest Digest) (*signify.Signature, error) {
 	if signerAppNoTouch != "" {
 		le.Printf("WARNING! This tkey-sign and signer app is built with the touch requirement removed")
 	}
@@ -99,7 +99,9 @@ func signMessage(signer tkeysign.Signer, pubkey []byte, digest Digest) (*signify
 		return nil, fmt.Errorf("signing failed: %w", err)
 	}
 
-	s, err := signify.NewSignature(digest.Alg, sig)
+	// Create a new signature with the algorithm from the digest
+	// and the key number from the associated public key.
+	s, err := signify.NewSignature(digest.Alg, pubkey.KeyNum, sig)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't convert to signify signature")
 	}
@@ -108,7 +110,8 @@ func signMessage(signer tkeysign.Signer, pubkey []byte, digest Digest) (*signify
 		le.Printf("signature: %x", sig)
 	}
 
-	if !ed25519.Verify(pubkey, []byte(digest.Digest), sig) {
+	// Check that this actually verifies.
+	if !ed25519.Verify(pubkey.Key[:], []byte(digest.Digest), sig) {
 		return nil, fmt.Errorf("signature FAILED verification")
 	}
 
@@ -138,7 +141,12 @@ func verifySignature(digest Digest, sigFile string, pubkeyFile string) error {
 		return fmt.Errorf("%w", err)
 	}
 
-	if !ed25519.Verify(pubKey[:], []byte(digest.Digest), signature.Sig[:]) {
+	// Check if this is really the expected the public pubkeyFile
+	if pubKey.KeyNum != signature.KeyNum {
+		return fmt.Errorf("invalid public key")
+	}
+
+	if !ed25519.Verify(pubKey.Key[:], []byte(digest.Digest), signature.Sig[:]) {
 		return fmt.Errorf("signature not valid")
 	}
 
@@ -253,14 +261,13 @@ func dumpFiles(sigFn string, keyFn string) error {
 		return fmt.Errorf("%w", err)
 	}
 
-	fmt.Printf("Signature\n  Alg: %s\n", sig.Alg)
-	fmt.Printf("  Sig: %x\n", sig.Sig)
+	fmt.Printf("Signature\n  Alg: %s\n  Num: %x\n  Sig: %x\n", sig.Alg, sig.KeyNum, sig.Sig)
 
 	if err := key.FromFile(keyFn); err != nil {
 		return fmt.Errorf("%w", err)
 	}
 
-	fmt.Printf("Key: %x\n", key)
+	fmt.Printf("Key\n  Alg: %s\n  Num: %x\n  Key: %x\n", key.Alg, key.KeyNum, key.Key)
 
 	return nil
 }
@@ -313,11 +320,13 @@ func Sign(digest Digest, keyFn string, sigFn string, overwrite bool, dev devArgs
 
 	defer signer.Close()
 
-	if !bytes.Equal(pub, pubKey[:]) {
+	// Make sure the returned pubkey from the TKey is the one the
+	// user expected.
+	if !bytes.Equal(pub, pubKey.Key[:]) {
 		return fmt.Errorf("key from file %v not equal to loaded app's", keyFn)
 	}
 
-	sig, err := signMessage(*signer, pub, digest)
+	sig, err := signMessage(*signer, pubKey, digest)
 	if err != nil {
 		return fmt.Errorf("signing failed: %w", err)
 	}

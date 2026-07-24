@@ -10,6 +10,7 @@ package signify
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
@@ -56,9 +57,7 @@ func (a AlgType) String() string {
 
 // A signify-compatible Ed25519 public key. Instantiate directly or
 // using NewPubKey if you have a slice.
-type PubKey [ed25519.PublicKeySize]byte
-
-type signifyPubKey struct {
+type PubKey struct {
 	Alg    [2]byte
 	KeyNum [8]byte
 	Key    [ed25519.PublicKeySize]byte
@@ -67,8 +66,9 @@ type signifyPubKey struct {
 // A signify-compatible Ed25519 signature. Instantiate directly or
 // using NewSignature if you have a slice.
 type Signature struct {
-	Alg AlgType
-	Sig [ed25519.SignatureSize]byte
+	Alg    AlgType
+	KeyNum [8]byte
+	Sig    [ed25519.SignatureSize]byte
 }
 
 type signifySignature struct {
@@ -77,7 +77,14 @@ type signifySignature struct {
 	Sig    [ed25519.SignatureSize]byte
 }
 
-// NewPubKey instantiates a signify PubKey from a byte slice.
+// NewPubKey instantiates a signify public key (PubKey) from a byte
+// slice.
+//
+// srcKey is expected to be an Ed25519 public key of exactly 32 bytes.
+//
+// It will randomize a KeyNum identifier to associate a future
+// signature with this key. If you want to do this yourself,
+// instantiate the PubKey directly.
 func NewPubKey(srcKey []byte) (PubKey, error) {
 	var key PubKey
 
@@ -85,7 +92,15 @@ func NewPubKey(srcKey []byte) (PubKey, error) {
 		return key, fmt.Errorf("key too large")
 	}
 
-	copy(key[:], srcKey)
+	key.Alg = [2]byte{'E', 'd'}
+
+	// Randomize a keynumber so any signatures generated from this
+	// one can be associated with this public key.
+	if _, err := rand.Read(key.KeyNum[:]); err != nil {
+		return key, fmt.Errorf("%w", err)
+	}
+
+	copy(key.Key[:], srcKey)
 
 	return key, nil
 }
@@ -100,35 +115,25 @@ func (p *PubKey) FromFile(fileName string) error {
 }
 
 func (p *PubKey) FromBuffer(b []byte) error {
-	var pubKey signifyPubKey
-
 	buf, err := fromSlice(b)
 	if err != nil {
 		return fmt.Errorf("could not decode: %w", err)
 	}
 
 	r := bytes.NewReader(buf)
-	if err := binary.Read(r, binary.BigEndian, &pubKey); err != nil {
+	if err := binary.Read(r, binary.BigEndian, p); err != nil {
 		return fmt.Errorf("%w", err)
 	}
 
-	if pubKey.Alg != [2]byte{'E', 'd'} {
+	if p.Alg != [2]byte{'E', 'd'} {
 		return fmt.Errorf("incompatible key")
 	}
-
-	copy(p[:], pubKey.Key[:])
 
 	return nil
 }
 
 func (p *PubKey) ToBuffer(comment string) ([]byte, error) {
-	signifyKey := signifyPubKey{
-		Alg:    [2]uint8{'E', 'd'},
-		KeyNum: [8]uint8{0x1, 0x7, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
-		Key:    *p,
-	}
-
-	return toSlice(signifyKey, comment)
+	return toSlice(p, comment)
 }
 
 func (p *PubKey) ToFile(fileName string, comment string, overwrite bool) error {
@@ -141,10 +146,15 @@ func (p *PubKey) ToFile(fileName string, comment string, overwrite bool) error {
 }
 
 // NewSignature instantiates a signify Signature from a byte slice.
-func NewSignature(t AlgType, srcSig []byte) (Signature, error) {
+//
+// It expects an algorithm type, an identifier corresponding to an
+// existing public key, and an Ed25519 signature slice.
+//
+// It returns a Signature and any error.
+func NewSignature(alg AlgType, keyNum [8]byte, srcSig []byte) (Signature, error) {
 	var sig Signature
 
-	if t != Ed && t != B2sEd {
+	if alg != Ed && alg != B2sEd {
 		return sig, fmt.Errorf("unknown algorithm")
 	}
 
@@ -152,7 +162,8 @@ func NewSignature(t AlgType, srcSig []byte) (Signature, error) {
 		return sig, fmt.Errorf("signature too large")
 	}
 
-	sig.Alg = t
+	sig.Alg = alg
+	sig.KeyNum = keyNum
 	copy(sig.Sig[:], srcSig)
 
 	return sig, nil
@@ -191,14 +202,15 @@ func (s *Signature) FromBuffer(b []byte) error {
 		return fmt.Errorf("unknown signature algorithm")
 	}
 
-	copy(s.Sig[:], sig.Sig[:])
+	s.KeyNum = sig.KeyNum
+	s.Sig = sig.Sig
 
 	return nil
 }
 
 func (s *Signature) ToBuffer(comment string) ([]byte, error) {
 	signifySig := signifySignature{
-		KeyNum: [8]uint8{1, 7},
+		KeyNum: s.KeyNum,
 		Sig:    s.Sig,
 	}
 
