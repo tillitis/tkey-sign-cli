@@ -14,49 +14,31 @@ See [Release notes](RELEASE.md).
 
 ## Usage
 
-You can specify the algorithm to use on the file before signing and
-verifying by specifying `-a/--alg algorithm`. The choices are "ed"
-(default, uses SHA-512) and "b2s" (BLAKE2s).
+Run with `-h`. See examples below. For details, see manual page in
+`doc/tkey-sign.1` and source in
+[doc/tkey-sign.scd](doc/tkey-sign.scd).
 
-Get a public key, possibly modifying the key pair by using a User
-Supplied Secret, and storing the public key in file `-p pubkey`.
+The key and signature files are compatible with OpenBSD's `signify(1)`
+but the way the signing works is not. Instead of signing the entire
+file `tkey-sign` signs a digest of the message. The hash algorithm can
+be SHA-512 (default) and BLAKE2s.
 
-```
-tkey-sign -G/--getkey [-d/--port device] [-s/--speed speed]
-[--uss] [--uss-file secret-file] -p/--public pubkey
-```
-
-Sign a file, specified with `-m message`, possibly modifying the
-measured key pair by using a User Supplied Secret, and storing the
-signature in `-x sigfile` or, by default, in `message.sig`. You need
-to supply the public key file as well which `tkey-sign` will
-automatically verify that it's the expected public key.
+In order to be at least slightly compatible with `signify`,
+`tkey-sign` when using the SHA-512 digest, does it in a way that is
+compatible with:
 
 ```
-tkey-sign -S/--sign [-d/--port device] [-s speed] -m message [-a/--alg algorithm]
-[--uss] [--uss-file secret-file] -p/--public pubkey [-x sig-file]
+sha512sum message-file >digestfile
+signify -V -m digestfile -x message-file.sig -p key.pub
 ```
 
-Verify a signature of file `-m message` with public key in `-p pubkey`.
-Signature is by default in `message.sig` but can be specified
-with `-x sigfile`. Doesn't need a connected TKey.
+See the helper script `signify-verify`.
 
-```
-tkey-sign -V/--verify -m message -p/--public pubkey [-x sigfile] [-a/--alg algorithm]
-```
+NB! This is slightly worrisome since it potentially includes the path
+(not necessarily just basename) of the `message-file` into the message
+that is signed depending on how you call `sha512sum`.
 
-Alternatively you can use OpenBSD's *signify(1)* to verify the
-signature but you need to compute the SHA-512 of the file first and
-feed that to the verification. We provide a handy script that does
-this:
-
-```
-signify-verify message pubkey
-```
-
-Exit code is 0 on success and non-zero on failure.
-
-See the manual page for details.
+There is no similar support for BLAKE2s digests.
 
 ## Examples
 
@@ -103,8 +85,8 @@ $ go install github.com/tillitis/tkey-sign-cli/cmd/tkey-sign@latest
 After this the `tkey-sign` command should be available in your
 `$GOBIN` directory.
 
-Note that this doesn't set the version and other stuff you get if you
-use `make`.
+Note that this doesn't include the manual page and doesn't set the
+version you get with `make`.
 
 ### Building
 
