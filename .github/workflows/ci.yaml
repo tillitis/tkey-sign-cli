@@ -29,6 +29,9 @@ jobs:
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
+      - name: tests
+        run: go test ./...
+
       - name: make
         run: make
 

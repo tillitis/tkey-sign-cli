@@ -1,5 +1,12 @@
 # Release notes
 
+## Upcoming release
+
+- Introduce package signify. Export Signify types to import and export
+  them to buffers and files.
+
+- Add support for BLAKE2s hashing.
+
 ## v1.1.1
 
 - Update tkeyclient to v1.3.1 to handle TKey Unlocked (product ID 8)
