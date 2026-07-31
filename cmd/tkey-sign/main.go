@@ -298,6 +298,13 @@ func GetKey(keyFn string, overwrite bool, dev devArgs, uss USSArgs) error {
 	if err != nil {
 		return fmt.Errorf("%w", err)
 	}
+	// Proof of concept.
+	binPath := keyFn + ".bin"
+	err = pubkey.ToFileRaw(binPath, true)
+
+	if err != nil {
+		return fmt.Errorf("%w", err)
+	}
 
 	return nil
 }
