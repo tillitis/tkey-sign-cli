@@ -128,14 +128,15 @@ with "untrusted comment: ", then encoded in BASE64:
 
 - 2 byte algorithm identifier, "Ed" for Ed25519 hashed with SHA-512,
   and "Eb", Ed25519 hashed with BLAKE2s.
-- 8 byte key number (unused by tkey-sign).
+- 8 byte key number used to lightly associate a signature with a key
+  pair.
 - 64 byte Ed25519 signature.
 
 Pubkey files are expected to contain a one-line comment beginning
 with "untrusted comment: ", then encoded in BASE64:
 
 - 2 byte algorithm identifier, so far only "Ed" for Ed25519.
-- 8 byte key number (unused by tkey-sign).
+- 8 byte key number.
 - 32 byte Ed25519 public key.
 
 NOTE WELL: The original `signify` command does Ed25519 signing on the

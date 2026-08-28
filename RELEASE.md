@@ -7,6 +7,12 @@
 
 - Add support for BLAKE2s hashing.
 
+- Handle KeyNum in public key and signature files. KeyNums is a way of
+  lightly associating key pairs with signatures so we have a chance to
+  say that a user is trying to verify against the wrong key rather
+  than saying something scary like that the signature doesn't verify
+  cryptographically.
+
 ## v1.1.1
 
 - Update tkeyclient to v1.3.1 to handle TKey Unlocked (product ID 8)
