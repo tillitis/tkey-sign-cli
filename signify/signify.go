@@ -10,7 +10,7 @@ package signify
 import (
 	"bytes"
 	"crypto/ed25519"
-	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
@@ -82,9 +82,10 @@ type signifySignature struct {
 //
 // srcKey is expected to be an Ed25519 public key of exactly 32 bytes.
 //
-// It will randomize a KeyNum identifier to associate a future
-// signature with this key. If you want to do this yourself,
-// instantiate the PubKey directly.
+// It will create KeyNum identifier to associate a future signature
+// with this key based on the first part of a hash digest of the key.
+// If you want to fill in the KeyNum yourself, instantiate the PubKey
+// directly instead of using NewPubKey.
 func NewPubKey(srcKey []byte) (PubKey, error) {
 	var key PubKey
 
@@ -94,11 +95,14 @@ func NewPubKey(srcKey []byte) (PubKey, error) {
 
 	key.Alg = [2]byte{'E', 'd'}
 
-	// Randomize a keynumber so any signatures generated from this
-	// one can be associated with this public key.
-	if _, err := rand.Read(key.KeyNum[:]); err != nil {
-		return key, fmt.Errorf("%w", err)
-	}
+	// Create an identification keynumber based on the public key
+	// so any signatures generated from this one can be associated
+	// with this public key.
+	//
+	// Add identifiaction we use the first 8 bytes of a SHA256
+	// digest and we don't care very much about collisions.
+	digest := sha256.Sum256(srcKey)
+	copy(key.KeyNum[:], digest[:7])
 
 	copy(key.Key[:], srcKey)
 
