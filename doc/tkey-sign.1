@@ -5,7 +5,7 @@
 .nh
 .ad l
 .\" Begin generated content:
-.TH "tkey\-sign" "1" "2026\-08\-27"
+.TH "tkey\-sign" "1" "2026\-08\-28"
 .PP
 .SH NAME
 .PP
@@ -21,7 +21,7 @@ tkey\-sign \- Create or verify digital signatures with the Tillitis TKey
 .PP
 \fBtkey\-sign\fR \-S/\-\-sign \-m message \-p/\-\-public pubkey [\-a/\-\-alg algorithm] [\-d/\-\-port device] [\-f/\-\-force] [\-s speed] [\-\-uss] [\-\-uss\-file ussfile] [\-\-force\-full\-uss] [\-\-verbose] [\-x sigfile]
 .PP
-\fBtkey\-sign\fR \-V/\-\-verify \-m message \-p/\-\-public [\-a/\-\-alg algorithm] pubkey [\-\-verbose] [\-x sigfile]
+\fBtkey\-sign\fR \-V/\-\-verify \-m message \-p/\-\-public pubkey [\-\-verbose] [\-x sigfile]
 .PP
 \fBtkey\-sign\fR \-\-version
 .PP
@@ -65,7 +65,8 @@ Combine with \fB\-\-uss\fR or \fB\-\-uss\-file ussfile\fR to change the key pair
 .RS 4
 Verify the signature of message.\& Does not need a connected TKey.\&
 Needs \fB\-m message\fR and \fB\-p pubkey\fR.\& Default signature file is message.\&sig.\&
-Specify with \fB\-x sigfile\fR.\&
+Specify other with \fB\-x sigfile\fR.\& Uses the hash algorithm as
+indicated by the signature file.\&
 .PP
 .RE
 \fB\-a, \-\-alg algorithm\fR

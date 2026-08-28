@@ -120,17 +120,7 @@ func signMessage(signer tkeysign.Signer, pubkey signify.PubKey, digest Digest) (
 
 // verifySignature verifies a Ed25519 signature stored in sigFile over
 // messageFile with public key in pubkeyFile
-func verifySignature(digest Digest, sigFile string, pubkeyFile string) error {
-	var signature signify.Signature
-
-	if err := signature.FromFile(sigFile); err != nil {
-		if errors.Is(errors.Unwrap(err), fs.ErrNotExist) {
-			return fmt.Errorf("signature file %v not found, specify with '-x sigfile'", sigFile)
-		}
-
-		return fmt.Errorf("%w", err)
-	}
-
+func verifySignature(digest Digest, signature signify.Signature, pubkeyFile string) error {
 	if digest.Alg != signature.Alg {
 		return fmt.Errorf("mismatched algorithm: asked for %s, sig file: %s", digest.Alg, signature.Alg)
 	}
@@ -302,8 +292,18 @@ func GetKey(keyFn string, overwrite bool, dev devArgs, uss USSArgs) error {
 	return nil
 }
 
-func Sign(digest Digest, keyFn string, sigFn string, overwrite bool, dev devArgs, uss USSArgs) error {
+func Sign(messageFn string, keyFn string, sigFn string, alg string, overwrite bool, dev devArgs, uss USSArgs) error {
 	var pubKey signify.PubKey
+
+	algType, err := algStringToType(alg)
+	if err != nil {
+		return fmt.Errorf("%w", err)
+	}
+
+	digest, err := getDigest(messageFn, algType)
+	if err != nil {
+		return fmt.Errorf("%w", err)
+	}
 
 	if keyFn == "" {
 		return errors.New("provide -p pubkey")
@@ -345,12 +345,29 @@ func Sign(digest Digest, keyFn string, sigFn string, overwrite bool, dev devArgs
 	return nil
 }
 
-func Verify(digest Digest, keyFn string, sigFn string) error {
+func Verify(messageFile string, keyFn string, sigFn string) error {
 	if keyFn == "" {
 		return errors.New("provide public key file path with -p pubkey")
 	}
 
-	if err := verifySignature(digest, sigFn, keyFn); err != nil {
+	var signature signify.Signature
+
+	if err := signature.FromFile(sigFn); err != nil {
+		if errors.Is(errors.Unwrap(err), fs.ErrNotExist) {
+			return fmt.Errorf("signature file %v not found, specify with '-x sigfile'", sigFn)
+		}
+
+		return fmt.Errorf("%w", err)
+	}
+
+	// Create a digest using the same algorithm as in the signature file.
+	digest, err := getDigest(messageFile, signature.Alg)
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		os.Exit(1)
+	}
+
+	if err := verifySignature(digest, signature, keyFn); err != nil {
 		return fmt.Errorf("verifying failed: %w", err)
 	}
 
@@ -370,8 +387,19 @@ func Dump(keyFn string, sigFn string) error {
 	return nil
 }
 
+func algStringToType(alg string) (signify.AlgType, error) {
+	switch alg {
+	case "ed":
+		return signify.Ed, nil
+	case "b2s":
+		return signify.B2sEd, nil
+	}
+
+	return signify.Ed, errors.New("unknown algorithm")
+}
+
 // getDigest returns the digest to sign or verify.
-func getDigest(msgFn string, alg string) (Digest, error) {
+func getDigest(msgFn string, alg signify.AlgType) (Digest, error) {
 	var digest Digest
 
 	if msgFn == "" {
@@ -383,11 +411,12 @@ func getDigest(msgFn string, alg string) (Digest, error) {
 		return digest, fmt.Errorf("%w", err)
 	}
 
+	digest.Alg = alg
+
 	switch alg {
-	case "ed":
+	case signify.Ed:
 		// default
 
-		digest.Alg = signify.Ed
 		fileDigest := sha512.Sum512(file)
 		// The actual message is compatible with output from
 		// sha512sum, including the filename, to work with
@@ -400,8 +429,7 @@ func getDigest(msgFn string, alg string) (Digest, error) {
 			le.Printf("SHA512 digest: %x", fileDigest)
 		}
 
-	case "b2s":
-		digest.Alg = signify.B2sEd
+	case signify.B2sEd:
 		d := blake2s.Sum256(file)
 		digest.Digest = string(d[:])
 
@@ -545,18 +573,6 @@ func main() {
 		ForceFull: *forceFullUss,
 	}
 
-	var digest Digest
-
-	if cmd == cmdSign || cmd == cmdVerify {
-		var err error
-
-		digest, err = getDigest(*messageFile, *alg)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			os.Exit(1)
-		}
-	}
-
 	if *sigFile == "" {
 		*sigFile = *messageFile + ".sig"
 	}
@@ -569,13 +585,13 @@ func main() {
 		}
 
 	case cmdSign:
-		if err := Sign(digest, *keyFile, *sigFile, *force, dev, uss); err != nil {
+		if err := Sign(*messageFile, *keyFile, *sigFile, *alg, *force, dev, uss); err != nil {
 			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
 
 	case cmdVerify:
-		if err := Verify(digest, *keyFile, *sigFile); err != nil {
+		if err := Verify(*messageFile, *keyFile, *sigFile); err != nil {
 			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}

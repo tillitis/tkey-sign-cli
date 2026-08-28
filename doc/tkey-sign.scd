@@ -14,7 +14,7 @@ tkey-sign - Create or verify digital signatures with the Tillitis TKey
 
 *tkey-sign* -S/--sign -m message -p/--public pubkey [-a/--alg algorithm] [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--force-full-uss] [--verbose] [-x sigfile]
 
-*tkey-sign* -V/--verify -m message -p/--public [-a/--alg algorithm] pubkey [--verbose] [-x sigfile]
+*tkey-sign* -V/--verify -m message -p/--public pubkey [--verbose] [-x sigfile]
 
 *tkey-sign* --version
 
@@ -51,7 +51,8 @@ when signing or extracting the public key.
 
 	Verify the signature of message. Does not need a connected TKey.
 	Needs *-m message* and *-p pubkey*. Default signature file is message.sig.
-	Specify with *-x sigfile*.
+	Specify other with *-x sigfile*. Uses the hash algorithm as
+	indicated by the signature file.
 
 *-a, --alg algorithm*
 
