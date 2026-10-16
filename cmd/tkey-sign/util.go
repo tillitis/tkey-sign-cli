@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/tillitis/tkey-sign-cli/signify"
 	"github.com/tillitis/tkeyclient"
 	"github.com/tillitis/tkeysign"
 )
@@ -73,4 +75,32 @@ func readBuildInfo() string {
 		v = sb.String()
 	}
 	return v
+}
+
+// writeRetry writes the data in the file given in filename as base64.
+// If a file already exists it prompts interactively for permission to
+// overwrite the file.
+func writeRetry(filename string, data signify.Data, comment string) error {
+	err := data.ToFile(filename, comment, false)
+	if os.IsExist(errors.Unwrap(err)) {
+		le.Printf("File %v exists. Overwrite [y/n]?", filename)
+		reader := bufio.NewReader(os.Stdin)
+		overWriteP, _ := reader.ReadString('\n')
+
+		// Trim space to normalize Windows line endings
+		overWriteP = strings.TrimSpace(overWriteP)
+
+		if overWriteP == "y" {
+			err = data.ToFile(filename, comment, true)
+		} else {
+			le.Printf("Aborted\n")
+			os.Exit(1)
+		}
+	}
+
+	if !os.IsExist(errors.Unwrap(err)) && err != nil {
+		return fmt.Errorf("%w", err)
+	}
+
+	return nil
 }
