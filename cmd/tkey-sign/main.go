@@ -304,7 +304,7 @@ func Sign(messageFn string, keyFn string, sigFn string, alg string, overwrite bo
 		return errors.New("provide -p pubkey")
 	}
 
-	if err := pubKey.FromFile(keyFn); err != nil {
+	if err = pubKey.FromFile(keyFn); err != nil {
 		return fmt.Errorf("couldn't read pubkey file: %w", err)
 	}
 
