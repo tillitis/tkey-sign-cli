@@ -274,10 +274,15 @@ func GetKey(keyFn string, overwrite bool, dev devArgs, uss USSArgs) error {
 	}
 
 	comment := "tkey public key"
+	b, err := pubkey.ToBuffer(comment)
+	if err != nil {
+		return fmt.Errorf("couldn't serialize: %w", err)
+	}
+
 	if overwrite {
-		err = pubkey.ToFile(keyFn, comment, true)
+		err = writeFile(keyFn, b, true)
 	} else {
-		err = writeRetry(keyFn, &pubkey, comment)
+		err = writeRetry(keyFn, b)
 	}
 
 	if err != nil {
@@ -327,10 +332,15 @@ func Sign(messageFn string, keyFn string, sigFn string, alg string, overwrite bo
 	}
 
 	comment := fmt.Sprintf("verify with %v", keyFn)
+	b, err := sig.ToBuffer(comment)
+	if err != nil {
+		return fmt.Errorf("couldn't serialize: %w", err)
+	}
+
 	if overwrite {
-		err = sig.ToFile(sigFn, comment, true)
+		err = writeFile(sigFn, b, true)
 	} else {
-		err = writeRetry(sigFn, sig, comment)
+		err = writeRetry(sigFn, b)
 	}
 
 	if err != nil {
