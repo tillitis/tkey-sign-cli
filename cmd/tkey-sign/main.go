@@ -34,6 +34,7 @@ const (
 	cmdSign
 	cmdSignCert
 	cmdVerify
+	cmdVerifyCert
 	cmdDump
 )
 
@@ -467,6 +468,38 @@ func SignCert(messageFile string, keyFn string, sigFn string, overwrite bool, de
 	return nil
 }
 
+func VerifyCert(messageFile string, keyFn string, sigFn string) error {
+	if messageFile != "" {
+		return fmt.Errorf("provide certificate file to verify using -x")
+	}
+
+	if keyFn != "" {
+		return fmt.Errorf("public key should be included in certificate, not via -p when verifying certificate")
+	}
+
+	if sigFn == "" {
+		return errors.New("provide certificate file to verify using -x")
+	}
+
+	di := distfile.DistInfo{}
+	err := di.FromFile(sigFn)
+	if err != nil {
+		return fmt.Errorf("couldn't read certificate file: %w", err)
+	}
+
+	rawMessage, err := di.Message.SigningDigest()
+
+	if err != nil {
+		return fmt.Errorf("failed to generate message: %w", err)
+	}
+
+	if !ed25519.Verify(di.PubKey.Key[:], rawMessage, di.Signature.Sig[:]) {
+		return fmt.Errorf("signature not valid")
+	}
+
+	return nil
+}
+
 func Dump(keyFn string, sigFn string) error {
 	if keyFn == "" {
 		return errors.New("provide public key file path with -p pubkey")
@@ -548,6 +581,8 @@ func usage() {
 
 %[1]s --sign-cert -m message -p/--public pubkey [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
 
+%[1]s --verify-cert -x sigfile
+
 %[1]s --version
 
 %[1]s signs (-S) or verifies (-V) the signature of a message in a
@@ -587,6 +622,7 @@ func main() {
 	sign := pflag.BoolP("sign", "S", false, "Sign the message.")
 	signCert := pflag.Bool("sign-cert", false, "Sign the certificate.")
 	verify := pflag.BoolP("verify", "V", false, "Verify signature of the message.")
+	verifyCert := pflag.Bool("verify-cert", false, "Verify the certificate.")
 	force := pflag.BoolP("force", "f", false, "Force writing of signature and pubkey files, overwriting any existing files.")
 	keyFile := pflag.StringP("public", "p", "", "Public key `pubkey`.")
 	sigFile := pflag.StringP("sig", "x", "", "Signature `sigfile`.")
@@ -655,6 +691,11 @@ func main() {
 		cmdArgs++
 	}
 
+	if *verifyCert {
+		cmd = cmdVerifyCert
+		cmdArgs++
+	}
+
 	if cmdArgs > 1 {
 		pflag.Usage()
 		os.Exit(1)
@@ -693,6 +734,14 @@ func main() {
 			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
+
+	case cmdVerifyCert:
+		if err := VerifyCert(*messageFile, *keyFile, *sigFile); err != nil {
+			fmt.Printf("%v\n", err)
+			os.Exit(1)
+		}
+
+		le.Printf("Distribution certificate verified")
 
 	case cmdVerify:
 		if err := Verify(*messageFile, *keyFile, *sigFile); err != nil {
