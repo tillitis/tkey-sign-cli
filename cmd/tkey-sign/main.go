@@ -18,6 +18,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/pflag"
+	"github.com/tillitis/tkey-sign-cli/distfile"
 	"github.com/tillitis/tkey-sign-cli/signify"
 	"github.com/tillitis/tkeyclient"
 	"github.com/tillitis/tkeysign"
@@ -31,6 +32,7 @@ const (
 	cmdUnknown = iota
 	cmdGetKey
 	cmdSign
+	cmdSignCert
 	cmdVerify
 	cmdDump
 )
@@ -388,6 +390,83 @@ func Verify(messageFile string, keyFn string, sigFn string) error {
 	return nil
 }
 
+func SignCert(messageFile string, keyFn string, sigFn string, overwrite bool, dev devArgs, uss USSArgs) error {
+	var pubKey signify.PubKey
+
+	if messageFile == "" {
+		return errors.New("provide distribution message with -m")
+	}
+
+	message := distfile.Message{}
+	err := message.FromFile(messageFile)
+	if err != nil {
+		return fmt.Errorf("couldn't read message file: %w", err)
+	}
+
+	if keyFn == "" {
+		return errors.New("provide public key file with -p")
+	}
+
+	err = pubKey.FromFile(keyFn)
+	if err != nil {
+		return fmt.Errorf("couldn't read public key file: %w", err)
+	}
+
+	rawMessage, err := message.SigningDigest()
+	if err != nil {
+		return fmt.Errorf("failed to generate message: %w", err)
+	}
+
+	signer, pub, err := loadSigner(dev.Path, dev.Speed, uss)
+	if err != nil {
+		return fmt.Errorf("couldn't load signer: %w", err)
+	}
+
+	defer signer.Close()
+
+	if !bytes.Equal(pub, pubKey.Key[:]) {
+		return fmt.Errorf("key from file %v not equal to loaded app's", keyFn)
+	}
+
+	rawSig, err := signMessage(*signer, pubKey.Key[:], rawMessage)
+	if err != nil {
+		return fmt.Errorf("signing failed: %w", err)
+	}
+
+	pubkey, err := distfile.NewPubKey(pub[:])
+	if err != nil {
+		return fmt.Errorf("creating pubkey failed: %w", err)
+	}
+	sig, err := distfile.NewSignature(distfile.B2sEd, rawSig)
+	if err != nil {
+		return fmt.Errorf("creating signature struct failed: %w", err)
+	}
+
+	di := distfile.DistInfo{
+		Version:   1,
+		Message:   message,
+		Signature: sig,
+		PubKey:    pubkey,
+	}
+
+	b, err := di.ToBuffer()
+	if err != nil {
+		return fmt.Errorf("couldn't serialize: %w", err)
+	}
+
+	if overwrite {
+		err = writeFile(sigFn, b, true)
+	} else {
+		err = writeRetry(sigFn, b)
+	}
+
+	if err != nil {
+		return fmt.Errorf("couldn't store signature: %w", err)
+	}
+
+	return nil
+}
+
 func Dump(keyFn string, sigFn string) error {
 	if keyFn == "" {
 		return errors.New("provide public key file path with -p pubkey")
@@ -467,6 +546,8 @@ func usage() {
 
 %[1]s -V/--verify -m message -p/--public pubkey [-a/--alg algorithm] [-x sigfile]
 
+%[1]s --sign-cert -m message -p/--public pubkey [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
+
 %[1]s --version
 
 %[1]s signs (-S) or verifies (-V) the signature of a message in a
@@ -504,6 +585,7 @@ func main() {
 	dump := pflag.BoolP("dump", "D", false, "Dump data about files.")
 	getKey := pflag.BoolP("getkey", "G", false, "Get public key.")
 	sign := pflag.BoolP("sign", "S", false, "Sign the message.")
+	signCert := pflag.Bool("sign-cert", false, "Sign the certificate.")
 	verify := pflag.BoolP("verify", "V", false, "Verify signature of the message.")
 	force := pflag.BoolP("force", "f", false, "Force writing of signature and pubkey files, overwriting any existing files.")
 	keyFile := pflag.StringP("public", "p", "", "Public key `pubkey`.")
@@ -563,6 +645,11 @@ func main() {
 		cmdArgs++
 	}
 
+	if *signCert {
+		cmd = cmdSignCert
+		cmdArgs++
+	}
+
 	if *verify {
 		cmd = cmdVerify
 		cmdArgs++
@@ -597,6 +684,12 @@ func main() {
 
 	case cmdSign:
 		if err := Sign(*messageFile, *keyFile, *sigFile, *alg, *force, dev, uss); err != nil {
+			fmt.Printf("%v\n", err)
+			os.Exit(1)
+		}
+
+	case cmdSignCert:
+		if err := SignCert(*messageFile, *keyFile, *sigFile, *force, dev, uss); err != nil {
 			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
