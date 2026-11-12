@@ -84,19 +84,37 @@ func GetEmbeddedAppDigest() string {
 	return hex.EncodeToString(digest[:])
 }
 
-// signMessage uses the connection to the signer and produces an
-// Ed25519 signature over message. It automatically verifies the
-// signature against the provided pubkey.
-//
-// It returns the Ed25519 signature on success or an error.
-func signMessage(signer tkeysign.Signer, pubkey signify.PubKey, digest Digest) (*signify.Signature, error) {
+func signMessage(signer tkeysign.Signer, pubkey []byte, message []byte) ([]byte, error) {
 	if signerAppNoTouch != "" {
 		le.Printf("WARNING! This tkey-sign and signer app is built with the touch requirement removed")
 	}
 
-	sig, err := signer.Sign([]byte(digest.Digest))
+	sig, err := signer.Sign(message)
 	if err != nil {
 		return nil, fmt.Errorf("signing failed: %w", err)
+	}
+
+	if verbose {
+		le.Printf("signature: %x", sig)
+	}
+
+	// Check that this actually verifies.
+	if !ed25519.Verify(pubkey, message, sig) {
+		return nil, fmt.Errorf("signature FAILED verification")
+	}
+
+	return sig, nil
+}
+
+// signDigest uses the connection to the signer and produces an
+// Ed25519 signature over message. It automatically verifies the
+// signature against the provided pubkey.
+//
+// It returns the Ed25519 signature on success or an error.
+func signDigest(signer tkeysign.Signer, pubkey signify.PubKey, digest Digest) (*signify.Signature, error) {
+	sig, err := signMessage(signer, pubkey.Key[:], []byte(digest.Digest))
+	if err != nil {
+		return nil, fmt.Errorf("digest sign failed")
 	}
 
 	// Create a new signature with the algorithm from the digest
@@ -106,16 +124,7 @@ func signMessage(signer tkeysign.Signer, pubkey signify.PubKey, digest Digest) (
 		return nil, fmt.Errorf("couldn't convert to signify signature")
 	}
 
-	if verbose {
-		le.Printf("signature: %x", sig)
-	}
-
-	// Check that this actually verifies.
-	if !ed25519.Verify(pubkey.Key[:], []byte(digest.Digest), sig) {
-		return nil, fmt.Errorf("signature FAILED verification")
-	}
-
-	return &s, nil
+	return &s, errors.Unwrap(err)
 }
 
 // verifySignature verifies a Ed25519 signature stored in sigFile over
@@ -326,7 +335,7 @@ func Sign(messageFn string, keyFn string, sigFn string, alg string, overwrite bo
 		return fmt.Errorf("key from file %v not equal to loaded app's", keyFn)
 	}
 
-	sig, err := signMessage(*signer, pubKey, digest)
+	sig, err := signDigest(*signer, pubKey, digest)
 	if err != nil {
 		return fmt.Errorf("signing failed: %w", err)
 	}
