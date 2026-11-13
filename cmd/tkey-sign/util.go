@@ -13,7 +13,6 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/tillitis/tkey-sign-cli/signify"
 	"github.com/tillitis/tkeyclient"
 	"github.com/tillitis/tkeysign"
 )
@@ -80,8 +79,8 @@ func readBuildInfo() string {
 // writeRetry writes the data in the file given in filename as base64.
 // If a file already exists it prompts interactively for permission to
 // overwrite the file.
-func writeRetry(filename string, data signify.Data, comment string) error {
-	err := data.ToFile(filename, comment, false)
+func writeRetry(filename string, data []byte) error {
+	err := writeFile(filename, data, false)
 	if os.IsExist(errors.Unwrap(err)) {
 		le.Printf("File %v exists. Overwrite [y/n]?", filename)
 		reader := bufio.NewReader(os.Stdin)
@@ -91,7 +90,7 @@ func writeRetry(filename string, data signify.Data, comment string) error {
 		overWriteP = strings.TrimSpace(overWriteP)
 
 		if overWriteP == "y" {
-			err = data.ToFile(filename, comment, true)
+			err = writeFile(filename, data, true)
 		} else {
 			le.Printf("Aborted\n")
 			os.Exit(1)
@@ -99,6 +98,32 @@ func writeRetry(filename string, data signify.Data, comment string) error {
 	}
 
 	if !os.IsExist(errors.Unwrap(err)) && err != nil {
+		return fmt.Errorf("%w", err)
+	}
+
+	return nil
+}
+
+// writeFile writes buf into file filename. If overwrite is true it
+// overwrites any existing file, otherwise it returns an error.
+func writeFile(filename string, buf []byte, overwrite bool) error {
+	var f *os.File
+
+	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
+	if err != nil {
+		if os.IsExist(err) && overwrite {
+			f, err = os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
+			if err != nil {
+				return fmt.Errorf("%w", err)
+			}
+		} else {
+			return fmt.Errorf("%w", err)
+		}
+	}
+
+	defer f.Close()
+
+	if _, err := f.Write(buf); err != nil {
 		return fmt.Errorf("%w", err)
 	}
 

@@ -18,6 +18,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/pflag"
+	"github.com/tillitis/tkey-sign-cli/distfile"
 	"github.com/tillitis/tkey-sign-cli/signify"
 	"github.com/tillitis/tkeyclient"
 	"github.com/tillitis/tkeysign"
@@ -31,7 +32,9 @@ const (
 	cmdUnknown = iota
 	cmdGetKey
 	cmdSign
+	cmdSignCert
 	cmdVerify
+	cmdVerifyCert
 	cmdDump
 )
 
@@ -84,19 +87,37 @@ func GetEmbeddedAppDigest() string {
 	return hex.EncodeToString(digest[:])
 }
 
-// signMessage uses the connection to the signer and produces an
-// Ed25519 signature over message. It automatically verifies the
-// signature against the provided pubkey.
-//
-// It returns the Ed25519 signature on success or an error.
-func signMessage(signer tkeysign.Signer, pubkey signify.PubKey, digest Digest) (*signify.Signature, error) {
+func signMessage(signer tkeysign.Signer, pubkey []byte, message []byte) ([]byte, error) {
 	if signerAppNoTouch != "" {
 		le.Printf("WARNING! This tkey-sign and signer app is built with the touch requirement removed")
 	}
 
-	sig, err := signer.Sign([]byte(digest.Digest))
+	sig, err := signer.Sign(message)
 	if err != nil {
 		return nil, fmt.Errorf("signing failed: %w", err)
+	}
+
+	if verbose {
+		le.Printf("signature: %x", sig)
+	}
+
+	// Check that this actually verifies.
+	if !ed25519.Verify(pubkey, message, sig) {
+		return nil, fmt.Errorf("signature FAILED verification")
+	}
+
+	return sig, nil
+}
+
+// signDigest uses the connection to the signer and produces an
+// Ed25519 signature over message. It automatically verifies the
+// signature against the provided pubkey.
+//
+// It returns the Ed25519 signature on success or an error.
+func signDigest(signer tkeysign.Signer, pubkey signify.PubKey, digest Digest) (*signify.Signature, error) {
+	sig, err := signMessage(signer, pubkey.Key[:], []byte(digest.Digest))
+	if err != nil {
+		return nil, fmt.Errorf("digest sign failed")
 	}
 
 	// Create a new signature with the algorithm from the digest
@@ -106,16 +127,7 @@ func signMessage(signer tkeysign.Signer, pubkey signify.PubKey, digest Digest) (
 		return nil, fmt.Errorf("couldn't convert to signify signature")
 	}
 
-	if verbose {
-		le.Printf("signature: %x", sig)
-	}
-
-	// Check that this actually verifies.
-	if !ed25519.Verify(pubkey.Key[:], []byte(digest.Digest), sig) {
-		return nil, fmt.Errorf("signature FAILED verification")
-	}
-
-	return &s, nil
+	return &s, errors.Unwrap(err)
 }
 
 // verifySignature verifies a Ed25519 signature stored in sigFile over
@@ -274,10 +286,15 @@ func GetKey(keyFn string, overwrite bool, dev devArgs, uss USSArgs) error {
 	}
 
 	comment := "tkey public key"
+	b, err := pubkey.ToBuffer(comment)
+	if err != nil {
+		return fmt.Errorf("couldn't serialize: %w", err)
+	}
+
 	if overwrite {
-		err = pubkey.ToFile(keyFn, comment, true)
+		err = writeFile(keyFn, b, true)
 	} else {
-		err = writeRetry(keyFn, &pubkey, comment)
+		err = writeRetry(keyFn, b)
 	}
 
 	if err != nil {
@@ -321,16 +338,21 @@ func Sign(messageFn string, keyFn string, sigFn string, alg string, overwrite bo
 		return fmt.Errorf("key from file %v not equal to loaded app's", keyFn)
 	}
 
-	sig, err := signMessage(*signer, pubKey, digest)
+	sig, err := signDigest(*signer, pubKey, digest)
 	if err != nil {
 		return fmt.Errorf("signing failed: %w", err)
 	}
 
 	comment := fmt.Sprintf("verify with %v", keyFn)
+	b, err := sig.ToBuffer(comment)
+	if err != nil {
+		return fmt.Errorf("couldn't serialize: %w", err)
+	}
+
 	if overwrite {
-		err = sig.ToFile(sigFn, comment, true)
+		err = writeFile(sigFn, b, true)
 	} else {
-		err = writeRetry(sigFn, sig, comment)
+		err = writeRetry(sigFn, b)
 	}
 
 	if err != nil {
@@ -364,6 +386,132 @@ func Verify(messageFile string, keyFn string, sigFn string) error {
 
 	if err := verifySignature(digest, signature, keyFn); err != nil {
 		return fmt.Errorf("verifying failed: %w", err)
+	}
+
+	return nil
+}
+
+func SignCert(messageFile string, keyFn string, sigFn string, overwrite bool, dev devArgs, uss USSArgs) error {
+	var pubKey signify.PubKey
+
+	if messageFile == "" {
+		return errors.New("provide -m appfile")
+	}
+
+	message := distfile.Message{}
+	err := message.FromFile(messageFile)
+	if err != nil {
+		return fmt.Errorf("couldn't read message file: %w", err)
+	}
+
+	if keyFn == "" {
+		return errors.New("provide -p pubkey")
+	}
+
+	err = pubKey.FromFile(keyFn)
+	if err != nil {
+		return fmt.Errorf("couldn't read pubkey file: %w", err)
+	}
+
+	rawMessage, err := message.ToBuffer()
+	if err != nil {
+		return fmt.Errorf("failed to generate message: %w", err)
+	}
+
+	signer, pub, err := loadSigner(dev.Path, dev.Speed, uss)
+	if err != nil {
+		return fmt.Errorf("couldn't load signer: %w", err)
+	}
+
+	defer signer.Close()
+
+	if !bytes.Equal(pub, pubKey.Key[:]) {
+		return fmt.Errorf("key from file %v not equal to loaded app's", keyFn)
+	}
+
+	rawSig, err := signMessage(*signer, pubKey.Key[:], rawMessage)
+	if err != nil {
+		return fmt.Errorf("signing failed: %w", err)
+	}
+
+	pubkey, err := distfile.NewPubKey(pub[:])
+	if err != nil {
+		return fmt.Errorf("creating pubkey failed: %w", err)
+	}
+	sig, err := distfile.NewSignature(distfile.B2sEd, rawSig)
+	if err != nil {
+		return fmt.Errorf("crating signature struct failed: %w", err)
+	}
+
+	di := distfile.DistInfo{
+		Version:   1,
+		Message:   message,
+		Signature: sig,
+		PubKey:    pubkey,
+	}
+
+	b, err := di.ToBuffer()
+	if err != nil {
+		return fmt.Errorf("couldn't serialize: %w", err)
+	}
+	fmt.Printf("b: %s\n", b)
+
+	if overwrite {
+		err = writeFile(sigFn, b, true)
+	} else {
+		err = writeRetry(sigFn, b)
+	}
+
+	if err != nil {
+		return fmt.Errorf("couldn't store signature: %w", err)
+	}
+
+	return nil
+}
+
+func VerifyCert(messageFile string, keyFn string, sigFn string) error {
+	var pubKey signify.PubKey
+
+	if messageFile == "" {
+		return errors.New("provide -m appfile")
+	}
+
+	msg := distfile.Message{}
+	err := msg.FromFile(messageFile)
+	if err != nil {
+		return fmt.Errorf("couldn't read message file: %w", err)
+	}
+
+	di := distfile.DistInfo{}
+	err = di.FromFile(sigFn)
+	if err != nil {
+		return fmt.Errorf("couldn't read certificate file: %w", err)
+	}
+
+	if di.Version != 1 {
+		return fmt.Errorf("certificate version %d, only support version 1", di.Version)
+	}
+
+	if keyFn == "" {
+		return errors.New("provide -p pubkey")
+	}
+
+	err = pubKey.FromFile(keyFn)
+	if err != nil {
+		return fmt.Errorf("couldn't read pubkey file: %w", err)
+	}
+
+	if !bytes.Equal(di.PubKey.Key[:], pubKey.Key[:]) {
+		return fmt.Errorf("key from file %v not equal to messageFile's", keyFn)
+	}
+
+	rawMessage, err := msg.ToBuffer()
+	if err != nil {
+		return fmt.Errorf("failed to generate message: %w", err)
+	}
+
+	if !ed25519.Verify(pubKey.Key[:], rawMessage, di.Signature.Sig[:]) {
+		return fmt.Errorf("signature not valid")
 	}
 
 	return nil
@@ -485,7 +633,9 @@ func main() {
 	dump := pflag.BoolP("dump", "D", false, "Dump data about files.")
 	getKey := pflag.BoolP("getkey", "G", false, "Get public key.")
 	sign := pflag.BoolP("sign", "S", false, "Sign the message.")
+	signCert := pflag.Bool("sign-cert", false, "Sign the certificate.")
 	verify := pflag.BoolP("verify", "V", false, "Verify signature of the message.")
+	verifyCert := pflag.Bool("verify-cert", false, "Verify the certificate.")
 	force := pflag.BoolP("force", "f", false, "Force writing of signature and pubkey files, overwriting any existing files.")
 	keyFile := pflag.StringP("public", "p", "", "Public key `pubkey`.")
 	sigFile := pflag.StringP("sig", "x", "", "Signature `sigfile`.")
@@ -544,8 +694,18 @@ func main() {
 		cmdArgs++
 	}
 
+	if *signCert {
+		cmd = cmdSignCert
+		cmdArgs++
+	}
+
 	if *verify {
 		cmd = cmdVerify
+		cmdArgs++
+	}
+
+	if *verifyCert {
+		cmd = cmdVerifyCert
 		cmdArgs++
 	}
 
@@ -581,6 +741,22 @@ func main() {
 			fmt.Printf("%v\n", err)
 			os.Exit(1)
 		}
+
+	case cmdSignCert:
+		fmt.Printf("sign-cert\n")
+		if err := SignCert(*messageFile, *keyFile, *sigFile, *force, dev, uss); err != nil {
+			fmt.Printf("%v\n", err)
+			os.Exit(1)
+		}
+
+	case cmdVerifyCert:
+		fmt.Printf("verify-cert\n")
+		if err := VerifyCert(*messageFile, *keyFile, *sigFile); err != nil {
+			fmt.Printf("%v\n", err)
+			os.Exit(1)
+		}
+
+		le.Printf("Signature verified")
 
 	case cmdVerify:
 		if err := Verify(*messageFile, *keyFile, *sigFile); err != nil {
