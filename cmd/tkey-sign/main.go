@@ -271,7 +271,7 @@ func dumpFiles(sigFn string, keyFn string) error {
 
 func GetKey(keyFn string, overwrite bool, dev devArgs, uss USSArgs) error {
 	if keyFn == "" {
-		return errors.New("please provide -p pubkey")
+		return errors.New("please provide public key file with -p")
 	}
 
 	signer, pub, err := loadSigner(dev.Path, dev.Speed, uss)
@@ -318,11 +318,11 @@ func Sign(messageFn string, keyFn string, sigFn string, alg string, overwrite bo
 	}
 
 	if keyFn == "" {
-		return errors.New("provide -p pubkey")
+		return errors.New("provide public key file with -p")
 	}
 
 	if err = pubKey.FromFile(keyFn); err != nil {
-		return fmt.Errorf("couldn't read pubkey file: %w", err)
+		return fmt.Errorf("couldn't read public key file: %w", err)
 	}
 
 	signer, pub, err := loadSigner(dev.Path, dev.Speed, uss)
@@ -364,14 +364,14 @@ func Sign(messageFn string, keyFn string, sigFn string, alg string, overwrite bo
 
 func Verify(messageFile string, keyFn string, sigFn string) error {
 	if keyFn == "" {
-		return errors.New("provide public key file path with -p pubkey")
+		return errors.New("provide public key file path with -p")
 	}
 
 	var signature signify.Signature
 
 	if err := signature.FromFile(sigFn); err != nil {
 		if errors.Is(errors.Unwrap(err), fs.ErrNotExist) {
-			return fmt.Errorf("signature file %v not found, specify with '-x sigfile'", sigFn)
+			return fmt.Errorf("signature file %v not found, specify with '-x file'", sigFn)
 		}
 
 		return fmt.Errorf("%w", err)
@@ -502,7 +502,7 @@ func VerifyCert(messageFile string, keyFn string, sigFn string) error {
 
 func Dump(keyFn string, sigFn string) error {
 	if keyFn == "" {
-		return errors.New("provide public key file path with -p pubkey")
+		return errors.New("provide public key file path with -p")
 	}
 
 	err := dumpFiles(sigFn, keyFn)
@@ -529,7 +529,7 @@ func getDigest(msgFn string, alg signify.AlgType) (Digest, error) {
 	var digest Digest
 
 	if msgFn == "" {
-		return digest, errors.New("provide -m messagefile")
+		return digest, errors.New("provide message file with -m")
 	}
 
 	file, err := os.ReadFile(msgFn)
@@ -572,21 +572,22 @@ func usage() {
 
 %[1]s -h/--help
 
-%[1]s -D/--dump -p/--public pubkey -m message  [-x sigfile]
-%[1]s -G/--getkey -p/--public pubkey [-d/--port device] [-f/--force] [-s/--speed speed] [--uss] [--uss-file ussfile] [--verbose] 
+%[1]s -D/--dump -p/--public file -m/--message file  [-x/--sig file]
 
-%[1]s -S/--sign -m message -p/--public pubkey [-a/--alg algorithm] [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
+%[1]s -G/--getkey -p/--public file [-d/--port device] [-f/--force] [-s/--speed bps] [--uss] [--uss-file file] [--verbose] 
 
-%[1]s -V/--verify -m message -p/--public pubkey [-a/--alg algorithm] [-x sigfile]
+%[1]s -S/--sign -m/--message file -p/--public file [-a/--alg algorithm] [-d/--port device] [-f/--force] [-s/--speed bps] [--uss] [--uss-file file] [--verbose] [-x/--sig file]
 
-%[1]s --sign-cert -m message -p/--public pubkey [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--verbose] [-x sigfile]
+%[1]s -V/--verify -m/--message file -p/--public file [-a/--alg algorithm] [-x/--sig file]
 
-%[1]s --verify-cert -x sigfile
+%[1]s --sign-cert -m/--message file -p/--public file [-d/--port device] [-f/--force] [-s/--speed bps] [--uss] [--uss-file file] [--verbose] [-x/--sig file]
+
+%[1]s --verify-cert -x/--sig file
 
 %[1]s --version
 
 %[1]s signs (-S) or verifies (-V) the signature of a message in a
-file. The message will be hashed with SHA-512 and either signed using
+file. The message will be hashed, default is SHA-512 and either signed using
 the TKey's private key or verified given the public key. The signing
 algorithm is Ed25519.
 
@@ -624,16 +625,16 @@ func main() {
 	verify := pflag.BoolP("verify", "V", false, "Verify signature of the message.")
 	verifyCert := pflag.Bool("verify-cert", false, "Verify the certificate.")
 	force := pflag.BoolP("force", "f", false, "Force writing of signature and pubkey files, overwriting any existing files.")
-	keyFile := pflag.StringP("public", "p", "", "Public key `pubkey`.")
-	sigFile := pflag.StringP("sig", "x", "", "Signature `sigfile`.")
-	messageFile := pflag.StringP("message", "m", "", "Specify file containing `message`.")
+	keyFile := pflag.StringP("public", "p", "", "Specify `file` containing the public key.")
+	sigFile := pflag.StringP("sig", "x", "", "Signature `file`.")
+	messageFile := pflag.StringP("message", "m", "", "Specify `file` containing message.")
 	devPath := pflag.StringP("port", "d", "",
 		"Set serial port `device`. If this is not used, auto-detection will be attempted.")
-	speed := pflag.IntP("speed", "s", 0, "Set serial port `speed` in bits per second.")
+	speed := pflag.IntP("speed", "s", 0, "Set serial port speed in `bps` (bits per second).")
 	enterUss := pflag.Bool("uss", false,
 		"Enable typing of a phrase to be hashed as the User Supplied Secret. The USS is loaded onto the TKey along with the app itself. A different USS results in different public/private keys.")
 	ussFile := pflag.String("uss-file", "",
-		"Read `ussfile` and hash its contents as the USS. Use '-' (dash) to read from stdin. The full contents are hashed unmodified (e.g. newlines are not stripped).")
+		"Read `file` and hash its contents as the USS. Use '-' (dash) to read from stdin. The full contents are hashed unmodified (e.g. newlines are not stripped).")
 	forceFullUss := pflag.Bool("force-full-uss", false, "Force use of 32 byte USS digest.")
 	versionOnly := pflag.BoolP("version", "v", false, "Output version information.")
 	helpOnly := pflag.BoolP("help", "h", false, "Output this help.")
