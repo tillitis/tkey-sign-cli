@@ -5,6 +5,9 @@
 - Introduce package signify. Export Signify types to import and export
   them to buffers and files.
 
+- Introducing signing and verifying application distribution
+  certificates. Used by the boot-verifier on TKey Castor.
+
 - Add support for BLAKE2s hashing.
 
 ## v1.1.1

@@ -10,6 +10,11 @@ app](https://github.com/tillitis/tkey-device-signer) running on the
 loaded into the TKey by `tkey-sign` when signing or extracting the
 public key. The measured private key never leaves the TKey.
 
+`tkey-sign` can also sign and verify distribution certificates for
+TKey applications, see the[TKey
+boot-verifier](https://github.com/tillitis/tkey-boot-verifier) for
+more info.
+
 See [Release notes](RELEASE.md).
 
 ## Usage
