@@ -8,13 +8,17 @@ tkey-sign - Create or verify digital signatures with the Tillitis TKey
 
 *tkey-sign* -h/--help
 
-*tkey-sign* -D/--dump -p/--public pubkey -m message  [-x sigfile]
+*tkey-sign* -D/--dump -p/--public file -m/--message file [-x/--sig file]
 
-*tkey-sign* -G/--getkey -p/--public pubkey [-d/--port device] [-f/--force] [-s/--speed speed] [--uss] [--uss-file ussfile] [--force-full-uss] [--verbose]
+*tkey-sign* -G/--getkey -p/--public file [-d/--port device] [-f/--force] [-s/--speed bps] [--uss] [--uss-file file] [--force-full-uss] [--verbose]
 
-*tkey-sign* -S/--sign -m message -p/--public pubkey [-a/--alg algorithm] [-d/--port device] [-f/--force] [-s speed] [--uss] [--uss-file ussfile] [--force-full-uss] [--verbose] [-x sigfile]
+*tkey-sign* -S/--sign -m/--message file -p/--public file [-a/--alg algorithm] [-d/--port device] [-f/--force] [-s/--speed bps] [--uss] [--uss-file file] [--force-full-uss] [--verbose] [-x/--sig file]
 
-*tkey-sign* -V/--verify -m message -p/--public pubkey [--verbose] [-x sigfile]
+*tkey-sign* -V/--verify -m/--message file -p/--public pubkey [-x/--sig sigfile]
+
+*tkey-sign* --sign-cert -m/--message file -p/--public file [-d/--port device] [-f/--force] [-s/--speed bps] [--uss] [--uss-file file] [--force-full-uss] [--verbose] [-x/--sig file]
+
+*tkey-sign* --verify-cert -x/--sig file
 
 *tkey-sign* --version
 
@@ -34,14 +38,14 @@ when signing or extracting the public key.
 
 	Load device app (if not already loaded) and output its public key into
 	a file. Pass the filename to store the public key in with *-p pubkey*.
-	Combine with *--uss* or *--uss-file ussfile* to change the key pair.
+	Combine with *--uss* or *--uss-file file* to change the key pair.
 
 *-S, --sign*
 
 	Load device app (if not already loaded) and sign the specified message
-	file (*-m message*). Store a signature in a file. Default signature
+	file (*-m file*). Store a signature in a file. Default signature
 	file is message file + ".sig", specify another filename with *-x
-	sigfile*. Also needs *-p pubkey* which is used for the comment in the
+	sigfile*. Also needs *-p file* which is used for the comment in the
 	sigfile and to verify that you really have the same public key as the
 	loaded device app.
 
@@ -50,9 +54,26 @@ when signing or extracting the public key.
 *-V, --verify*
 
 	Verify the signature of message. Does not need a connected TKey.
-	Needs *-m message* and *-p pubkey*. Default signature file is message.sig.
+	Needs *-m file* and *-p file*. Default signature file is message.sig.
 	Specify other with *-x sigfile*. Uses the hash algorithm as
 	indicated by the signature file.
+
+*--sign-cert*
+
+	Load device app (if not already loaded) and sign the specified
+	distibution message file (*-m file*). Create a distrbution certificate
+	and include message, public key and signature in it. Default file is
+	message file + "sig", specify another filename with *-x file*. Also
+	needs *-p file* which is used to verify that you really have the same
+	public key as the loaded device app.
+
+	Combine with *--uss* or *--uss-file file* to change the key pair.
+
+*--verify-cert*
+
+	Verify the signature of the distribution certificate. Does not need a
+	connected TKey. Needs *-x file*. Does not take *-m file* nor *-p file*
+	since the message and public key is included in the certificate.
 
 *-a, --alg algorithm*
 
@@ -80,16 +101,16 @@ when signing or extracting the public key.
 
 	Output short help text.
 
-*-m message*
+*-m, --message file*
 
 	When signing, the file containing the message to sign.
 	When verifying, the file containing the message to verify.
 
-*-p, --public pubkey*
+*-p, --public file*
 
 	Specify path to public key file.
 
-*-s, --speed speed*
+*-s, --speed bps*
 
 	Specify the speed in bits/second for the TKey device. Default is
 	62500 b/s.
@@ -101,7 +122,7 @@ when signing or extracting the public key.
 	pairs. A warning is printed if the app is already loaded and this
 	USS is not used.
 
-*--uss-file secret*
+*--uss-file file*
 
 	Use a User Supplied Secret in a file to be used when loading a
 	device app to the TKey. This is used to create different key
@@ -117,7 +138,7 @@ when signing or extracting the public key.
 
 	Output version information and quit.
 
-*-x sigfile*
+*-x, --sig file*
 
 	The signature file to create or use with verification. The default
 	when not using *-x* is *message.sig*.
