@@ -4,9 +4,10 @@ go 1.23.1
 
 require (
 	github.com/spf13/pflag v1.0.5
-	github.com/tillitis/tkeyclient v1.3.1
+	github.com/tillitis/tkeyclient v1.4.0
 	github.com/tillitis/tkeysign v1.0.1
 	github.com/tillitis/tkeyutil v0.0.9
+	golang.org/x/crypto v0.40.0
 )
 
 require (
@@ -19,7 +20,6 @@ require (
 	github.com/stretchr/testify v1.8.4 // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
 	go.bug.st/serial v1.6.2 // indirect
-	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/term v0.33.0 // indirect
 )
